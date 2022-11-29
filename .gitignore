@@ -139,9 +139,9 @@ dmypy.json
 cython_debug/
 
 # PYCharm_wyx
-BugLifeCycle/.idea/
-BugLifeCycle/data/
-BugLifeCycle/temp_data/
-BugLifeCycle/data_before20221028/
-BugLifeCycle/figures/
-BugLifeCycle/chinese_L-12_H-768_A-12/
+BugFixEfficiency/.idea/
+BugFixEfficiency/data/
+BugFixEfficiency/temp_data/
+BugFixEfficiency/data_before20221028/
+BugFixEfficiency/figures/
+BugFixEfficiency/chinese_L-12_H-768_A-12/
