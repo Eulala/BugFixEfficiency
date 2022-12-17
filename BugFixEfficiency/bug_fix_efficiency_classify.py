@@ -30,9 +30,16 @@ def generate_bug_fix_features(read_path, write_path):
             # res[b]['n_developer'] = calculate_the_number_of_developer(sequence)
             res[r][b]['dev_cont'] = calculate_contributions_of_developer(sequence)
             effort = []
+            # for i in res[r][b]['dev_cont']:
+            #     effort.append(i['n_events']/i['n_time'])
             for i in res[r][b]['dev_cont']:
-                effort.append(i['n_events']/i['n_time'])
-            res[r][b]['fix_efficiency'] = numpy.mean(effort)
+                effort.append(i['n_events'])
+            res[r][b]['fix_efficiency'] = res[r][b]['fix_time'] / numpy.sum(effort)
+            # res[r][b]['fix_efficiency'] = numpy.mean(effort)
+            # try:
+            #     res[r][b]['fix_efficiency'] = 1/numpy.sum(effort)
+            # except Exception:
+            #     res[r][b]['fix_efficiency'] = 0
 
     with open(write_path, 'w') as f:
         for r in res:

@@ -7,7 +7,7 @@ from pre_classification import *
 def draw_plot(df, feature, save_path, y_label, title, _type, use_efficiency=False):
     f, ax = plt.subplots(figsize=(11, 6))
 
-    ax.set(ylim=(0, 2500))
+    ax.set(ylim=(0, 150))
     if _type == 'violin':
         if use_efficiency is False:
             sns.violinplot(x="cluster", y=feature, data=df, palette="Set3", bw=.2, cut=1, linewidth=1, showmeans=True)
@@ -20,8 +20,9 @@ def draw_plot(df, feature, save_path, y_label, title, _type, use_efficiency=Fals
             sns.boxplot(x="cluster", y=feature, data=df, palette="Set3", showmeans=True, hue='efficiency_level', hue_order=['high', 'low'])
     # sns.despine(left=True, bottom=True)
     plt.ylabel(y_label)
-    plt.title(title)
-    plt.legend(title="efficiency_level", loc=2)
+    if use_efficiency is True:
+        plt.title(title)
+        plt.legend(title="efficiency_level", loc=2)
     plt.savefig(save_path, dpi=150)
 
 
@@ -129,11 +130,11 @@ def set_efficiency_level(read_path):
     #                     df['efficiency_2'] >= _mean), 'efficiency_level'] = 'low'
     # df.to_csv(read_path)
     df = pd.read_csv(read_path)
-    for cluster in ['0', '1', '2']:
-        _mean = df.loc[(df['cluster'].isin([cluster])), 'fix_efficiency'].mean()
-        print(_mean)
-        df.loc[ (df['cluster'].isin([cluster])) & (df['fix_efficiency'] < _mean), 'efficiency_level'] = 'low'
-        df.loc[ (df['cluster'].isin([cluster])) & (df['fix_efficiency'] >= _mean), 'efficiency_level'] = 'high'
+    for cluster in [0, 1, 2]:
+        _split = df.loc[(df['cluster'].isin([cluster])), 'fix_efficiency'].mean()
+        print(_split)
+        df.loc[ (df['cluster'].isin([cluster])) & (df['fix_efficiency'] < _split), 'efficiency_level'] = 'high'
+        df.loc[ (df['cluster'].isin([cluster])) & (df['fix_efficiency'] >= _split), 'efficiency_level'] = 'low'
     df.to_csv(read_path, index=0)
 
 
@@ -143,18 +144,26 @@ if __name__ == '__main__':
     # set_efficiency_level('data/clusters_features.csv')
     # generate_all_pics('data/clusters_features.csv')
 
+    # df = pd.read_csv('data/clusters_features.csv')
+    # temp_df = df.loc[(df['cluster'] == 2), ['fix_time', 'fix_efficiency', 'sequence_len']]
+    # print(temp_df.corr(method='spearman'))
+
     df = pd.read_csv('data/clusters_features.csv')
-    df = df.loc[:, ['fix_efficiency', 'fix_time', 'sequence_len', 'loc']]
-    print(df.corr(method='spearman'))
-    # feature = 'fix_time'
-    # repo = 'ansible'
-    # temp_df = df[df['repo_name'].isin([repo])]
-    # draw_plot(temp_df, feature, 'figures/' + repo + '_' + feature + '_by_efficiency_box.png', y_label=feature,
-    #           title=repo,
-    #           _type='box', use_efficiency=True)
-    # draw_plot(df, feature, 'figures/' + feature + '_by_efficiency_box_mixrepo.png', y_label=feature,
-    #           title=None,
-    #           _type='box', use_efficiency=True)
+    # df = df.loc[:, ['fix_efficiency', 'fix_time', 'sequence_len', 'loc']]
+    # print(df.corr(method='spearman'))
+    feature = 'sequence_len'
+
+    temp_df = df[df['repo_name'].isin(['ansible'])]
+    draw_plot(temp_df, feature, 'figures/ansible_' + feature + '_by_efficiency_box.png', y_label=feature,
+              title='ansible',
+              _type='box', use_efficiency=True)
+    temp_df = df[df['repo_name'].isin(['tensorflow'])]
+    draw_plot(temp_df, feature, 'figures/tensorflow_' + feature + '_by_efficiency_box.png', y_label=feature,
+              title='tensorflow',
+              _type='box', use_efficiency=True)
+    draw_plot(df, feature, 'figures/' + feature + '_by_efficiency_box_mixrepo.png', y_label=feature,
+              title=None,
+              _type='box', use_efficiency=True)
 
     # f, ax = plt.subplots(figsize=(11, 6))
     # repo = 'tensorflow'

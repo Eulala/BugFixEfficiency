@@ -43,12 +43,12 @@ if __name__ == '__main__':
 
     # sequential pattern mining
     # generate_event_id(['data/closed_bug_fix.json'], 'data/event_id.json')
-    # generate_input_sequence(['data/clusters_features.csv',
-    #                          'data/closed_bug_fix.json',
-    #                          'data/event_id.json'],
-    #                         'data/closed_bug_fix_sequences.json')
-
+    generate_input_sequence(['data/clusters_features.csv',
+                             'data/closed_bug_fix.json',
+                             'data/event_id.json'],
+                            'data/closed_bug_fix_sequences.json')
     mining_CSP('data/closed_bug_fix_sequences.json', min_cr=2)
+
     # for i in range(0, 3):
     #     remove_subsequence_csp(r'data/'+str(i)+'CSP_results.csv', r'data/'+str(i)+'CSP_remained.csv')
 

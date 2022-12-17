@@ -197,7 +197,7 @@ def generate_project_database(item, sequences):
 
 def generate_project_sequence(item, sequence: str):
     cur_pos_s = sequence.find(item)
-    if cur_pos_s > 0:
+    if cur_pos_s >= 0:
         return sequence[cur_pos_s: len(sequence)]
     else:
         return []
@@ -244,6 +244,7 @@ def DFS_CSP(current_e, item, min_sup, proj_1, proj_2, D_1, D_2, one_item_set, CS
     # calculate support
     sup_1 = calculate_sup(current_e, proj_1)
     sup_2 = calculate_sup(current_e, proj_2)
+    # print(current_e, sup_1, sup_2)
 
     # generate corresponding projected database
     d_proj_1 = generate_project_database(current_e, proj_1)
@@ -278,6 +279,8 @@ def DFS_CSP(current_e, item, min_sup, proj_1, proj_2, D_1, D_2, one_item_set, CS
             chi_square = calculate_chi_square(sup_1, sup_2, sup_y_1, sup_y_2)
             if chi_square < 1:
                 continue
+        # print(current_e, i, sup_y_1, sup_y_2)
+        # exit(-1)
         DFS_CSP(i, new_item, min_sup, d_proj_1, d_proj_2, D_1, D_2, one_item_set, CSPs, min_cr)
 
 

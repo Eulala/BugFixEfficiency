@@ -5,6 +5,7 @@ import pandas as pd
 import matplotlib.pyplot as plt
 import seaborn as sns
 from extract_from_mongo import *
+from contrast_sequential_pattern_mining import *
 
 
 def draw_violin_plot(data_path, save_path):
@@ -297,15 +298,146 @@ if __name__ == '__main__':
     # df = pd.read_csv('data/0CSP_with_name.csv')
     # temp = df.loc[('Assigne' in df['CSP']) & ('Unassign' in df['CSP'])]
     # print(temp)
-    # print(df.loc[(df['Sup_1']+df['Sup_2'] > 50) & (df['Class'] == 1)].count())
-    count = 0
-    with open(r'data/2CSP_with_name.csv', 'r') as f:
-        reader = csv.reader(f)
-        for row in reader:
-            if row[0] == 'CSP':
-                continue
-            n = row[0].split('-')
-            if len(n) >= 11:
-                print(row[0], row[6])
-                count += 1
-    print(count)
+    # # print(df.loc[(df['Sup_1']+df['Sup_2'] > 50) & (df['Class'] == 1)].count())
+    # count = 0
+    # with open(r'data/2CSP_with_name.csv', 'r') as f:
+    #     reader = csv.reader(f)
+    #     for row in reader:
+    #         if row[0] == 'CSP':
+    #             continue
+    #         n = row[0].split('-')
+    #         if len(n) >= 11:
+    #             print(row[0], row[6])
+    #             count += 1
+    # print(count)
+
+    # df = pd.read_csv('result/repo_metric_coefficient.csv')
+    # temp = df.loc[(df['repo'] == 'total')]
+    # matrix = np.zeros((15, 15))
+    # metric_map = { }
+    # metric_map_reverse = {}
+    # count = 0
+    # for j in temp:
+    #     col_name = j
+    #     if col_name == 'repo':
+    #         continue
+    #     r = col_name.split('-')[0]
+    #     c = col_name.split('-')[1]
+    #
+    #     if r not in metric_map:
+    #         metric_map[r] = count
+    #         metric_map_reverse[count] = r
+    #         count += 1
+    #     if c not in metric_map:
+    #         metric_map[c] = count
+    #         metric_map_reverse[count] = c
+    #         count += 1
+    #
+    #     n_r = metric_map[r]
+    #     n_c = metric_map[c]
+    #     value = temp[j].tolist()[0]
+    #     matrix[n_r, n_c] = value
+    #
+    # head = ['']
+    # for i in range(15):
+    #     head.append(metric_map_reverse[i])
+    # with open('result/total_coef_matrix.csv', 'w', newline='') as f:
+    #     writer = csv.writer(f)
+    #     writer.writerow(head)
+    #     for r in range(15):
+    #         temp_list = [metric_map_reverse[r]]
+    #         for j in range(15):
+    #             temp_list.append(matrix[r, j])
+    #         writer.writerow(temp_list)
+    # level_matrix = [[] for i in range(15)]
+    # print(level_matrix)
+    # for i in range(15):
+    #     for j in range(15):
+    #         r = matrix[i, j]
+    #         level = matrix[i, j]
+    #         if abs(r) <= 1:
+    #             if abs(r) == 1:
+    #                 level = 'P'
+    #             elif abs(r) >= 0.7:
+    #                 level = 'S'
+    #             elif abs(r) >= 0.4:
+    #                 level = 'M'
+    #             elif abs(r) >= 0.1:
+    #                 level = 'W'
+    #             else:
+    #                 level = 'N'
+    #         level_matrix[i].append(level)
+    # with open('result/total_coef_level_matrix.csv', 'w', newline='') as f:
+    #     writer = csv.writer(f)
+    #     writer.writerow(head)
+    #     for r in range(15):
+    #         temp_list = [metric_map_reverse[r]]
+    #         for j in range(15):
+    #             temp_list.append(level_matrix[r][j])
+    #         writer.writerow(temp_list)
+    #
+    # df = pd.read_csv('data/clusters_features.csv')
+    # temp_df = df.loc[(df['cluster'] == 2), ['fix_efficiency', 'fix_time']]
+    #
+    # print(temp_df.corr())
+
+    df = pd.read_csv('data/2CSP_results.csv')
+    print(df.loc[(df['Class'] == 1)].count())
+    print(df.loc[(df['Class'] == 2)].count())
+
+    # with open('data/closed_bug_fix_sequences.json', 'r') as f:
+    #     dic = json.load(f)
+    #     low = dic['1']['low']
+    #     high = dic['1']['high']
+    #     low_list = []
+    #     high_list = []
+    #     for d in low:
+    #         low_list.append(d['sequence'])
+    #     for d in high:
+    #         high_list.append(d['sequence'])
+    #
+    #
+    #     print(len(low_list), len(high_list))
+    #     count_1 = 0
+    #     count_2 = 0
+    #     target = 'EKEX'
+    #     for source in low_list:
+    #         flag = False
+    #         if target == source:
+    #             count_1 += 1
+    #             continue
+    #         cur_pos_t = 0
+    #         cur_pos_s = 0
+    #         while cur_pos_s < len(source):
+    #             if target[cur_pos_t] == source[cur_pos_s]:
+    #                 cur_pos_t = cur_pos_t + 1
+    #             cur_pos_s = cur_pos_s + 1
+    #             if cur_pos_t == len(target):
+    #                 flag = True
+    #                 break
+    #
+    #         if flag is True:
+    #             # print(source)
+    #             # target is a subsequence of source
+    #             count_1 += 1
+    #
+    #     for source in high_list:
+    #         flag = False
+    #         if target == source:
+    #             count_2 += 1
+    #             continue
+    #         cur_pos_t = 0
+    #         cur_pos_s = 0
+    #         while cur_pos_s < len(source):
+    #             if target[cur_pos_t] == source[cur_pos_s]:
+    #                 cur_pos_t = cur_pos_t + 1
+    #             cur_pos_s = cur_pos_s + 1
+    #             if cur_pos_t == len(target):
+    #                 flag = True
+    #                 break
+    #
+    #         if flag is True:
+    #             # target is a subsequence of source
+    #             count_2 += 1
+    #
+    #     print(count_1, count_2)
