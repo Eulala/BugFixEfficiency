@@ -4,7 +4,7 @@ from util import *
 import pandas as pd
 import matplotlib.pyplot as plt
 import seaborn as sns
-from extract_from_mongo import *
+from myMongo import *
 from contrast_sequential_pattern_mining import *
 
 

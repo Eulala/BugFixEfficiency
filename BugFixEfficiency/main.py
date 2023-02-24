@@ -12,6 +12,9 @@ from text_clustering import *
 from pre_classification import *
 
 if __name__ == '__main__':
+    initialize()
+    extract_raw_data()
+    exit(-1)
     # extract_raw_data(['tensorflow', 'ansible'])
     # select_bug_issue()
     # add_event_to_issues('data/bug_issues.json', 'data/issue_events.json', 'issue')

@@ -1,26 +1,34 @@
 import math
-import pymongo
 import json
+import os
 from datetime import datetime
 import pandas as pd
 import time
 import numpy
 import csv
 from sklearn.cluster import KMeans
+import configparser
+from myMongo import *
 
 
-def write_json_data(data, path):
-    with open(path, 'w') as f:
+def write_json_data(data, filename):
+    start = time.time()
+    with open(filename, 'w') as f:
         for i in data:
             f.write(json.dumps(i)+'\n')
+    end = time.time()
+    print('write {} lines to {} runtime: {}'.format(len(data), filename, end-start))
 
 
-def load_json_data(path):
+def load_json_data(filename):
+    start = time.time()
     data = []
-    with open(path, 'r') as f:
+    with open(filename, 'r') as f:
         for i in f:
             dic = json.loads(i)
             data.append(dic)
+    end = time.time()
+    print('load {} lines from {} runtime: {}'.format(len(data), filename, end-start))
     return data
 
 
@@ -69,3 +77,24 @@ def delete_outlier(data, index):
             count = count + 1
 
     return res, new_index
+
+
+def create_config():
+    c_file = configparser.ConfigParser()
+    c_file.add_section("MongoDB")
+    c_file.set("MongoDB", "mongo_ip", "172.27.135.32")
+    c_file.set("MongoDB", "port", "27017")
+    c_file.set("MongoDB", "username", "oss")
+    c_file.set("MongoDB", "pwd", "oss")
+    c_file.set("MongoDB", "db_name", "oss_behavior")
+
+    with open(r'configurations.ini', 'w') as f:
+        c_file.write(f)
+        f.flush()
+        f.close()
+
+
+def load_config():
+    config = configparser.ConfigParser()
+    config.read('configurations.ini')
+    return config

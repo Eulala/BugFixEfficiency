@@ -1,27 +1,55 @@
-from extract_from_mongo import *
+from util import *
 from bs4 import BeautifulSoup
 import nltk
 
-state_map = {'new': 1, 'comprehended': 2, 'assigned': 3, 'proposed': 4, 'passed': 5, 'closed': 6, 'failed': 7, 'discussed': 8}
+# state_map = {'new': 1, 'comprehended': 2, 'assigned': 3, 'proposed': 4, 'passed': 5, 'closed': 6, 'failed': 7, 'discussed': 8}
+mongo_config = {'ip': '', 'port': 0, 'username': '', 'pwd': '', 'db_name': ''}
+data_dir = ''
 
 
-def extract_raw_data(project_name):
-    issues = extract_data('issue', {'proj_name': project_name, 'collection': 'issue'})
-    write_json_data(issues, 'data/issues.json')
-    prs = extract_data('pr', {'proj_name': project_name, 'collection': 'pullRequest'})
-    write_json_data(prs, 'data/prs.json')
-    issue_label = extract_data('label', {'proj_name': project_name, 'collection': 'issueLabel'})
-    write_json_data(issue_label, 'data/issue_labels.json')
-    issue_event = extract_data('event', {'proj_name': project_name, 'collection': 'issueTimeline'})
-    write_json_data(issue_event, 'data/issue_events.json')
-    pr_event = extract_data('event', {'proj_name': project_name, 'collection': 'pullRequestTimeline'})
-    write_json_data(pr_event, 'data/pr_events.json')
-    issue_comment = extract_data('comment', {'proj_name': project_name, 'collection': 'issueComment'})
-    write_json_data(issue_comment, 'data/issue_comments.json')
-    pr_comment = extract_data('comment', {'proj_name': project_name, 'collection': 'pullRequestComment'})
-    write_json_data(pr_comment, 'data/pr_comments.json')
-    issue_body = extract_data('body', {'proj_name': project_name, 'collection': 'issue'})
-    write_json_data(issue_body, 'data/issue_bodies.json')
+def initialize():
+    config = load_config()
+    global data_dir
+    data_dir = config['DataPath']['root_dir']
+    if not os.path.exists(data_dir):
+        os.mkdir(data_dir)
+
+    mongo = config['MongoDB']
+    global mongo_config
+    mongo_config['ip'] = mongo['ip']
+    mongo_config['port'] = int(mongo['port'])
+    mongo_config['username'] = mongo['username']
+    mongo_config['pwd'] = mongo['pwd']
+    mongo_config['db_name'] = mongo['db_name']
+
+
+def extract_raw_data():
+    mongo_c = MyMongo(mongo_config['ip'], mongo_config['username'], mongo_config['pwd'], port=int(mongo_config['port']))
+    mongo_c.set_db_name(mongo_config['db_name'])
+    mongo_c.connect()
+
+    data = mongo_c.get_col_value(col_name='bug_fix', cond={'repo_name': {"$in": ['tensorflow/tensorflow', 'ansible/ansible']}})
+    write_json_data(data, data_dir+'bug_fix.json')
+
+
+
+# def extract_raw_data(project_name):
+#     issues = extract_data('issue', {'proj_name': project_name, 'collection': 'issue'})
+#     write_json_data(issues, 'data/issues.json')
+#     prs = extract_data('pr', {'proj_name': project_name, 'collection': 'pullRequest'})
+#     write_json_data(prs, 'data/prs.json')
+#     issue_label = extract_data('label', {'proj_name': project_name, 'collection': 'issueLabel'})
+#     write_json_data(issue_label, 'data/issue_labels.json')
+#     issue_event = extract_data('event', {'proj_name': project_name, 'collection': 'issueTimeline'})
+#     write_json_data(issue_event, 'data/issue_events.json')
+#     pr_event = extract_data('event', {'proj_name': project_name, 'collection': 'pullRequestTimeline'})
+#     write_json_data(pr_event, 'data/pr_events.json')
+#     issue_comment = extract_data('comment', {'proj_name': project_name, 'collection': 'issueComment'})
+#     write_json_data(issue_comment, 'data/issue_comments.json')
+#     pr_comment = extract_data('comment', {'proj_name': project_name, 'collection': 'pullRequestComment'})
+#     write_json_data(pr_comment, 'data/pr_comments.json')
+#     issue_body = extract_data('body', {'proj_name': project_name, 'collection': 'issue'})
+#     write_json_data(issue_body, 'data/issue_bodies.json')
 
 
 def extract_commit_diff(issue_path):
