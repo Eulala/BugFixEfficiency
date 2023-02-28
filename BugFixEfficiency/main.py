@@ -13,7 +13,22 @@ from pre_classification import *
 
 if __name__ == '__main__':
     initialize()
-    extract_raw_data()
+    # extract_raw_data()
+    commits = get_commit_list()
+    # select_commits(commits)
+    select_no_data_commits(commits)
+
+    exit(-1)
+
+    data = load_json_list('data/bug_fix.json')
+    for i in data:
+        print(i['repo_name'])
+        print(i['target'])
+        events = i['action_sequence']
+        for e in events:
+            if 'referen' in e['event_type'].lower():
+                print(e)
+        break
     exit(-1)
     # extract_raw_data(['tensorflow', 'ansible'])
     # select_bug_issue()

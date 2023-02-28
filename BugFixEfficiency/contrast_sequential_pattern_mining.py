@@ -4,7 +4,7 @@ from util import *
 def generate_event_id(read_path, write_path):
     event_sequences_set = []
     for r in read_path:
-        for d in load_json_data(r):
+        for d in load_json_list(r):
             event_sequences_set = event_sequences_set + d['events']
 
     event_types = set()
@@ -26,7 +26,7 @@ def generate_event_id(read_path, write_path):
 def generate_input_sequence(read_path: list, write_path):
     # read_path: arg1 = cluster_features_path, arg2 = issue_path (with events), arg3 = event_id_path
     clusters = pd.read_csv(read_path[0])
-    bug_issues = load_json_data(read_path[1])
+    bug_issues = load_json_list(read_path[1])
     event_id = {}
     with open(read_path[2], 'r') as f:
         for i in f:
@@ -50,7 +50,7 @@ def generate_input_sequence(read_path: list, write_path):
         except Exception:
             continue
 
-    write_json_data([bug_fix], write_path)
+    write_json_list([bug_fix], write_path)
 
 
 def generate_event_sequence(events, event_id):
@@ -64,7 +64,7 @@ def generate_event_sequence(events, event_id):
 
 
 def mining_CSP(read_path, min_cr=1):
-    read_data = load_json_data(read_path)[0]
+    read_data = load_json_list(read_path)[0]
     for i in read_data:
         print("cluster: {}, sequence_num: high={}, low={}".format(i, len(read_data[i]['high']), len(read_data[i]['low'])))
         data_1 = []

@@ -1,6 +1,8 @@
 import math
 import json
 import os
+import tqdm
+import pickle
 from datetime import datetime
 import pandas as pd
 import time
@@ -11,7 +13,7 @@ import configparser
 from myMongo import *
 
 
-def write_json_data(data, filename):
+def write_json_list(data, filename):
     start = time.time()
     with open(filename, 'w') as f:
         for i in data:
@@ -20,7 +22,16 @@ def write_json_data(data, filename):
     print('write {} lines to {} runtime: {}'.format(len(data), filename, end-start))
 
 
-def load_json_data(filename):
+def write_json_dict(data, filename):
+    start = time.time()
+    with open(filename, 'w') as f:
+        for i in data:
+            f.write(json.dumps({'_id': i, 'data': data[i]})+'\n')
+    end = time.time()
+    print('write {} lines to {} runtime: {}'.format(len(data), filename, end-start))
+
+
+def load_json_list(filename):
     start = time.time()
     data = []
     with open(filename, 'r') as f:
@@ -30,6 +41,27 @@ def load_json_data(filename):
     end = time.time()
     print('load {} lines from {} runtime: {}'.format(len(data), filename, end-start))
     return data
+
+
+def load_json_dict(filename):
+    start = time.time()
+    data = {}
+    with open(filename, 'r') as f:
+        for i in f:
+            dic = json.loads(i)
+            data[dic['_id']] = dic['data']
+    end = time.time()
+    print('load {} lines from {} runtime: {}'.format(len(data), filename, end-start))
+    return data
+
+
+def load_from_disk(filename):
+    start = time.time()
+    with open(filename, 'rb') as f:
+        obj = pickle.load(f)
+    end = time.time()
+    print('load from {} runtime: {}'.format(filename, end-start))
+    return obj
 
 
 def calculate_delta_t(time1, time2):

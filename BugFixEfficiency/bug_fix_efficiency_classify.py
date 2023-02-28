@@ -5,7 +5,7 @@ bots = { 'tensorflowbutler', 'google-ml-butler', 'tensorflow-bot' }
 
 
 def load_clusters(path):
-    cluster = load_json_data(path)[0]
+    cluster = load_json_list(path)[0]
     return cluster
 
 
@@ -182,18 +182,18 @@ def sequence_clustering(read_path, write_path):
 
 
 def generate_sequence_length(issue_path):
-    issues = load_json_data(issue_path)
+    issues = load_json_list(issue_path)
     res = []
     for i in issues:
         length = calculate_sequence_length(i['events'])
         i['sequence_len'] = length
         res.append(i)
 
-    write_json_data(res, issue_path)
+    write_json_list(res, issue_path)
 
 
 def integrate_issue_with_efficiency(issue_path, efficiency):
-    issues = load_json_data(issue_path)
+    issues = load_json_list(issue_path)
 
     efficiency_dict = {}
     for i in efficiency:
@@ -208,7 +208,7 @@ def integrate_issue_with_efficiency(issue_path, efficiency):
         i['fix_time'] = efficiency_dict[repo][number]['fix_time']
         res.append(i)
 
-    write_json_data(res, issue_path)
+    write_json_list(res, issue_path)
 
 
 

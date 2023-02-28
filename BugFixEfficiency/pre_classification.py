@@ -6,7 +6,7 @@ from output import *
 
 def calculate_issue_loc(issue_path):
     res = {}
-    data = load_json_data(issue_path)
+    data = load_json_list(issue_path)
     for d in data:
         if d['repo_name'] not in res:
             res[d['repo_name']] = {}
@@ -127,7 +127,7 @@ def cluster_by_complexity(issue_data, write_path):
 
 def generate_clusters_features(issue_path, cluster_path, write_path):
     loc = calculate_issue_loc(issue_path)
-    issues = load_json_data(issue_path)
+    issues = load_json_list(issue_path)
 
     issues_f = {}
     for i in issues:
@@ -140,7 +140,7 @@ def generate_clusters_features(issue_path, cluster_path, write_path):
             # print(i['repo_name'], i['number'])
             continue
 
-    i_clusters = load_json_data(cluster_path)[0]
+    i_clusters = load_json_list(cluster_path)[0]
     clusters_f = {}
     n_cluster = 3
     for repo in i_clusters:
@@ -152,4 +152,4 @@ def generate_clusters_features(issue_path, cluster_path, write_path):
             clusters_f[repo][c][int(i)] = issues_f[repo][int(i)]
 
 
-    write_json_data([clusters_f], write_path)
+    write_json_list([clusters_f], write_path)

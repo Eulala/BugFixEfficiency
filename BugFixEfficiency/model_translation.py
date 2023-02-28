@@ -160,7 +160,7 @@ def record_state(states):
         dic = states[s]
         dic['number'] = s
         res.append(dic)
-    write_json_data(res, 'data/bug_state.json')
+    write_json_list(res, 'data/bug_state.json')
 
 
 state_func_dict = { 4: generate_next_state_from_4, 5: generate_next_state_from_5, 6: generate_next_state_from_6, 7: generate_next_state_from_7}
@@ -217,12 +217,12 @@ def generate_state_action_sequence(path):
                 temp_list.append(dic['action'][j])
                 temp_list.append(dic['state'][j+1])
             res.append(temp_list)
-    write_json_data(res, 'data/bug_life_sequences.json')
+    write_json_list(res, 'data/bug_life_sequences.json')
 
 
 def generate_event_transition_matrix(path, write_path):
-    event_sequences = load_json_data(path)
-    event_id = load_json_data('data/event_id.json')[0]
+    event_sequences = load_json_list(path)
+    event_id = load_json_list('data/event_id.json')[0]
     # if is_efficient:
     #     event_id = load_json_data('data/efficient_event_id.json')[0]
     # else:

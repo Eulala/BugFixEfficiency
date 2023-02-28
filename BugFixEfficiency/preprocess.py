@@ -5,6 +5,7 @@ import nltk
 # state_map = {'new': 1, 'comprehended': 2, 'assigned': 3, 'proposed': 4, 'passed': 5, 'closed': 6, 'failed': 7, 'discussed': 8}
 mongo_config = {'ip': '', 'port': 0, 'username': '', 'pwd': '', 'db_name': ''}
 data_dir = ''
+commit_dir = ''
 
 
 def initialize():
@@ -13,6 +14,11 @@ def initialize():
     data_dir = config['DataPath']['root_dir']
     if not os.path.exists(data_dir):
         os.mkdir(data_dir)
+
+    global commit_dir
+    commit_dir = config['DataPath']['commit_dir']
+    if not os.path.exists(commit_dir):
+        raise ValueError('no such commit dir')
 
     mongo = config['MongoDB']
     global mongo_config
@@ -29,7 +35,92 @@ def extract_raw_data():
     mongo_c.connect()
 
     data = mongo_c.get_col_value(col_name='bug_fix', cond={'repo_name': {"$in": ['tensorflow/tensorflow', 'ansible/ansible']}})
-    write_json_data(data, data_dir+'bug_fix.json')
+    write_json_list(data, data_dir + 'bug_fix.json')
+
+
+def get_commit_list():
+    if os.path.exists(data_dir+'commit_list.json'):
+        commits = load_json_list(data_dir+'commit_list.json')
+        commits = set(commits)
+        return commits
+    else:
+        commits = set()
+        data = load_json_list(data_dir + 'bug_fix.json')
+        for i in data:
+            events = i['action_sequence']
+            for e in events:
+                if e['event_type'] == 'ReferencedEvent':
+                    commits.add(e['supple_data']['oid'])
+                elif e['event_type'] == 'PullRequestEvent':
+                    for sub_e in e['sub_event']:
+                        if sub_e['event_type'] == 'PullRequestCommit':
+                            commits.add(sub_e['supple_data']['oid'])
+        write_json_list(commits, data_dir+'commit_list.json')
+        return commits
+
+
+def select_commits(commit_list):
+    res = {}
+    files = os.listdir(commit_dir)
+    files = list(filter(lambda f: 'enrich' not in f, files))
+    for f in files:
+        commits = load_from_disk(commit_dir+f)
+        for c in tqdm.tqdm(commits):
+            if c in commit_list:
+                res[c] = commits[c]
+
+    write_json_dict(res, data_dir+'commits.json')
+
+
+def select_no_data_commits(commit_list):
+    commits = load_json_dict(data_dir+'commits.json')
+    exists = set()
+    for c in commits:
+        exists.add(c)
+    res = commit_list-exists
+
+    commit_additions = load_json_list(data_dir+'commit_diffs.json')
+    for c in commit_additions:
+        if c['sha'] in res:
+            exists.add(c['sha'])
+
+    # print(commit_list-exists)
+
+    urls = []
+    res = commit_list - exists
+    res_c = {}
+    with open(r'F:\data_back\BugEfficiency\data\issue_events.json', 'r') as f:
+        for i in f:
+            dic = json.loads(i)
+            if dic['data']['__typename'] == 'ReferencedEvent':
+                try:
+                    res_c[dic['data']['commit']['oid']] = dic['data']['commitRepository']['nameWithOwner']
+                except Exception:
+                    pass
+    with open(r'F:\data_back\BugEfficiency\data\pr_events.json', 'r') as f:
+        for i in f:
+            dic = json.loads(i)
+            if dic['data']['__typename'] == 'ReferencedEvent':
+                try:
+                    res_c[dic['data']['commit']['oid']] = dic['data']['commitRepository']['nameWithOwner']
+                except Exception:
+                    pass
+
+    for c in res:
+        if c in res_c:
+            _str = "https://api.github.com/repos/"+res_c[c]+"/commits/" + c + "?per_page=100"
+            urls.append(_str)
+        else:
+            print(c)
+
+    with open('commit_urls.csv', 'w', newline='') as f:
+        writer = csv.writer(f)
+        writer.writerow(['_id'])
+        for c in urls:
+            writer.writerow([c])
+
+
+
 
 
 
@@ -52,25 +143,6 @@ def extract_raw_data():
 #     write_json_data(issue_body, 'data/issue_bodies.json')
 
 
-def extract_commit_diff(issue_path):
-    oids = []
-    issues = load_json_data(issue_path)
-    for i in issues:
-        oids = oids + i['linked_commit']
-
-    write_json_data(oids, 'data/can_not_found_commit.json')
-    exit(-1)
-    slices = 5
-    temp_oids = []
-    for i in range(slices):
-        temp_oids.append([])
-    for i in range(len(oids)):
-        temp_oids[i % slices].append(oids[i])
-    commitDiff = []
-    for o in temp_oids:
-        commitDiff = commitDiff + extract_data('commitDiff', {'oid_set': o, 'collection': 'commitDiff'})
-    write_json_data(commitDiff, 'data/commit_diffs.json')
-
 
 def translate_issue_body(data_path, write_path):
     res = []
@@ -81,7 +153,7 @@ def translate_issue_body(data_path, write_path):
             dic['data']['body'] = html_document_str(_body)
             res.append(dic)
 
-    write_json_data(res, write_path)
+    write_json_list(res, write_path)
 
 
 # def html_to_str(r_data):
@@ -139,7 +211,7 @@ def select_bug_issue():
                     print(_id)
 
     # print(bug_set)
-    write_json_data(res, 'data/bug_issues.json')
+    write_json_list(res, 'data/bug_issues.json')
 
 
 def add_event_to_issues(issue_path, event_path, _type):
@@ -210,9 +282,9 @@ def add_event_to_issues(issue_path, event_path, _type):
         issues[i]['events'] = sorted(issues[i]['events'], key=lambda k: k['created_at'])
         res.append(issues[i])
     if _type == 'issue':
-        write_json_data(res, 'data/bug_issues_with_events.json')
+        write_json_list(res, 'data/bug_issues_with_events.json')
     else:
-        write_json_data(res, 'data/prs_with_events.json')
+        write_json_list(res, 'data/prs_with_events.json')
 
 
 def add_comment_to_issues(issue_path, comment_path):
@@ -242,7 +314,7 @@ def add_comment_to_issues(issue_path, comment_path):
     for i in issues:
         issues[i]['events'] = sorted(issues[i]['events'], key=lambda k: k['created_at'])
         res.append(issues[i])
-    write_json_data(res, issue_path)
+    write_json_list(res, issue_path)
 
 
 def select_issue_with_code(issue_path, pr_path, write_path):
@@ -290,7 +362,7 @@ def select_issue_with_code(issue_path, pr_path, write_path):
             dic['linked_commit'] = list(dic['linked_commit'])
             if len(dic['linked_commit']) > 0:
                 res.append(dic)
-    write_json_data(res, write_path)
+    write_json_list(res, write_path)
 
 
 
@@ -317,7 +389,7 @@ def get_cross_reference(issue_path, pr_set):
 
 def get_issue_commit(issue_path, _type='issue'):
     issues_commit = {}
-    data = load_json_data(issue_path)
+    data = load_json_list(issue_path)
     for dic in data:
         _id = dic['repo_name'] + '_'+str(dic['number'])
         if _id not in issues_commit:
@@ -368,12 +440,12 @@ def select_closed_issue(path):
                     flag = False
             if flag:
                 res.append(dic)
-    write_json_data(res, 'data/closed_bug_issues.json')
+    write_json_list(res, 'data/closed_bug_issues.json')
 
 
 def add_commitDiff_to_issues(issue_path, commitDiff_path, write_path):
-    issues = load_json_data(issue_path)
-    abnormal_issues = load_json_data('data/abnormal_issues.json')
+    issues = load_json_list(issue_path)
+    abnormal_issues = load_json_list('data/abnormal_issues.json')
     delete_issues = {}
     for i in abnormal_issues:
         delete_issues[i['number']] = i['repo_name']
@@ -397,7 +469,7 @@ def add_commitDiff_to_issues(issue_path, commitDiff_path, write_path):
         res.append(i)
     print(len(not_found))
     # write_json_data(list(not_found), 'data/can_not_found_commit.json')
-    write_json_data(res, write_path)
+    write_json_list(res, write_path)
 
 
 def integrate_issue_and_prs(issue_path, pr_path, write_path):
@@ -408,7 +480,7 @@ def integrate_issue_and_prs(issue_path, pr_path, write_path):
             _id = dic['repo_name']+'_'+str(dic['number'])
             prs[_id] = dic
     res_i = []
-    issues = load_json_data(issue_path)
+    issues = load_json_list(issue_path)
     for i in issues:
         for p in i['linked_pr']:
             _id = i['repo_name']+'_'+str(p)
@@ -422,11 +494,11 @@ def integrate_issue_and_prs(issue_path, pr_path, write_path):
         i['events'] = sorted(res_e, key=lambda k: k['created_at'])
         res_i.append(i)
 
-    write_json_data(res_i, write_path)
+    write_json_list(res_i, write_path)
 
 
 def delete_merge_commit(commitDiff_path):
-    diffs = load_json_data(commitDiff_path)
+    diffs = load_json_list(commitDiff_path)
     res = []
     delete_commit = {'2f5d058d8f1e287d6c7e4257e64137fb0af7de0f',
                      'ea2e80888a68c399f422e6657913eb81973a9f9a',
@@ -447,11 +519,11 @@ def delete_merge_commit(commitDiff_path):
             continue
         else:
             res.append(d)
-    write_json_data(res, 'data/commit_diffs_limited.json')
+    write_json_list(res, 'data/commit_diffs_limited.json')
 
 
 def limit_commit_filetype(commitDiff_path):
-    diffs = load_json_data(commitDiff_path)
+    diffs = load_json_list(commitDiff_path)
     res = []
 
     d_suffix = {'md', 'rst', 'orig', 'lock', 'pub', 'stdout', 'stderr', 'csv', 'pbtxt', 'asciidoc', 'svg', 'templated'}
@@ -479,7 +551,7 @@ def limit_commit_filetype(commitDiff_path):
         c['data']['del'] = _del
         res.append(c)
 
-    write_json_data(res, 'data/commit_diffs_limited.json')
+    write_json_list(res, 'data/commit_diffs_limited.json')
 
 
 

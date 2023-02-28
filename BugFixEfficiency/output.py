@@ -28,7 +28,7 @@ def draw_plot(df, feature, save_path, y_label, title, _type, use_efficiency=Fals
 
 def reset_cluster_name(cluster_path, write_path):
     # sort from smallest to largest
-    cluster_features = load_json_data(cluster_path)[0]
+    cluster_features = load_json_list(cluster_path)[0]
     loc = { }
     for repo in cluster_features:
         loc[repo] = {}
@@ -55,11 +55,11 @@ def reset_cluster_name(cluster_path, write_path):
         for i in range(len(indexes[repo])):
             print(i)
             res[repo][i] = cluster_features[repo][str(indexes[repo][i])]
-    write_json_data([res], write_path)
+    write_json_list([res], write_path)
 
 
 def translate_to_csv(read_path, write_path):
-    cluster_features = load_json_data(read_path)[0]
+    cluster_features = load_json_list(read_path)[0]
     # efficiency = { }
     # for repo in cluster_features:
     #     efficiency[repo] = {}
