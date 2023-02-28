@@ -4,7 +4,7 @@ from util import *
 import pandas as pd
 import matplotlib.pyplot as plt
 import seaborn as sns
-from myMongo import *
+from preprocess import *
 from contrast_sequential_pattern_mining import *
 
 
@@ -21,6 +21,9 @@ def draw_violin_plot(data_path, save_path):
 
 
 if __name__ == '__main__':
+    initialize()
+    select_closed_issue()
+    exit(-1)
     # with open(r'data/closed_bug_fix.json', 'r') as f:
     #     for i in f:
     #         dic = json.loads(i)

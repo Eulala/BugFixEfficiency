@@ -14,43 +14,18 @@ from pre_classification import *
 if __name__ == '__main__':
     initialize()
     # extract_raw_data()
-    commits = get_commit_list()
+    # find_commit_repo()
+    # commits = get_commit_list()
     # select_commits(commits)
-    select_no_data_commits(commits)
+    # select_closed_issue()
 
+    # generate_commit_loc()
+    # add_commitDiff_to_issues()
+    issues_loc = calculate_issue_loc()
+    cluster_by_complexity(issues_loc, 'data/issue_clusters.json')
     exit(-1)
 
-    data = load_json_list('data/bug_fix.json')
-    for i in data:
-        print(i['repo_name'])
-        print(i['target'])
-        events = i['action_sequence']
-        for e in events:
-            if 'referen' in e['event_type'].lower():
-                print(e)
-        break
-    exit(-1)
-    # extract_raw_data(['tensorflow', 'ansible'])
-    # select_bug_issue()
-    # add_event_to_issues('data/bug_issues.json', 'data/issue_events.json', 'issue')
-    # add_event_to_issues('data/prs.json', 'data/pr_events.json', 'pr')
-    # select_issue_with_code('data/bug_issues_with_events.json', 'data/prs_with_events.json',
-    #                        'data/bug_issues_with_resolutions.json')
-    # select_closed_issue('data/bug_issues_with_resolutions.json')
-    # add_comment_to_issues('data/closed_bug_issues.json', 'data/issue_comments.json')
 
-    # extract_commit_diff('data/closed_bug_issues.json')
-    # generate_commit_diffs()
-    # delete_merge_commit('data/commit_diffs.json')
-    # limit_commit_filetype('data/commit_diffs_limited.json')
-    #
-    # add_commitDiff_to_issues('data/closed_bug_issues.json', 'data/commit_diffs_limited.json', 'data/closed_bug_issues.json')
-
-    # issues_loc = calculate_issue_loc('data/closed_bug_issues.json')
-    # cluster_by_complexity(issues_loc, 'data/issue_clusters.json')
-    #
-    # integrate_issue_and_prs('data/closed_bug_issues.json', 'data/prs.json',
-    #                         'data/closed_bug_fix.json')
     #
     # generate_bug_fix_features('data/closed_bug_fix.json', 'data/closed_bug_fix_efficiency.json')
     # bug_fix_efficiency = load_json_data('data/closed_bug_fix_efficiency.json')

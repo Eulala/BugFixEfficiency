@@ -30,12 +30,48 @@ def initialize():
 
 
 def extract_raw_data():
-    mongo_c = MyMongo(mongo_config['ip'], mongo_config['username'], mongo_config['pwd'], port=int(mongo_config['port']))
-    mongo_c.set_db_name(mongo_config['db_name'])
-    mongo_c.connect()
+    # mongo_c = MyMongo(mongo_config['ip'], mongo_config['username'], mongo_config['pwd'], port=int(mongo_config['port']))
+    # mongo_c.set_db_name(mongo_config['db_name'])
+    # mongo_c.connect()
+    #
+    # data = mongo_c.get_col_value(col_name='bug_fix', cond={'repo_name': {"$in": ['tensorflow/tensorflow', 'ansible/ansible']}})
+    # write_json_list(data, data_dir + 'bug_fix.json')
+    # mongo_c.close()
 
-    data = mongo_c.get_col_value(col_name='bug_fix', cond={'repo_name': {"$in": ['tensorflow/tensorflow', 'ansible/ansible']}})
-    write_json_list(data, data_dir + 'bug_fix.json')
+    mongo_c = MyMongo(mongo_config['ip'], 'sbh', 'sbh123456', port=int(mongo_config['port']))
+    mongo_c.set_db_name('ghdb')
+    mongo_c.connect()
+    # data = mongo_c.get_col_value(col_name='issueTimeline', cond={"index.repo_name": {"$in": ['tensorflow', 'ansible']}})
+    # write_json_list(data, data_dir+'issue_events.json')
+
+    data = mongo_c.get_col_value(col_name='pullRequestTimeline', cond={"index.repo_name": {"$in": ['tensorflow', 'ansible']}})
+    write_json_list(data, data_dir+'pr_events.json')
+    mongo_c.close()
+
+
+def find_commit_repo():
+    res = {}
+    issue_events = load_json_list(data_dir+'issue_events.json')
+    for i in issue_events:
+        if i['data']['__typename'] == "ReferencedEvent":
+            try:
+                oid = i['data']['commit']['oid']
+                repo = i['data']['commitRepository']['nameWithOwner']
+                res[oid] = repo
+            except Exception:
+                pass
+
+    pr_events = load_json_list(data_dir+'pr_events.json')
+    for i in pr_events:
+        if i['data']['__typename'] == "PullRequestCommit":
+            try:
+                oid = i['data']['commit']['oid']
+                repo = i['index']['repo_owner']+'/' + i['index']['repo_name']
+                res[oid] = repo
+            except Exception:
+                pass
+
+    write_json_dict(res, data_dir+'commit_repos.json')
 
 
 def get_commit_list():
@@ -120,7 +156,37 @@ def select_no_data_commits(commit_list):
             writer.writerow([c])
 
 
+def select_closed_issue():
+    res = []
+    with open(data_dir+'bug_fix.json', 'r') as f:
+        for i in f:
+            dic = json.loads(i)
+            if dic['state'] == 'Close':
+                res.append(dic)
 
+    write_json_list(res, data_dir+'closed_bug_fix.json')
+
+
+def generate_commit_loc():
+    res = {}
+    commits = load_json_list(data_dir+'commits.json')
+    for i in commits:
+        temp = { 'total': i['data']['stats']['total'],
+                 'add': i['data']['stats']['additions'],
+                 'del': i['data']['stats']['deletions'] }
+        res[i['_id']] = temp
+
+
+    commits = load_json_list(data_dir+'commit_diffs.json')
+    for i in commits:
+        if i['sha'] in res:
+            continue
+        temp = { 'total': i['data']['add']+i['data']['del'],
+                 'add': i['data']['add'],
+                 'del': i['data']['del'] }
+        res[i['sha']] = temp
+
+    write_json_dict(res, data_dir+'commits_loc.json')
 
 
 
@@ -189,104 +255,6 @@ def get_issue_body(selected_issues_num, data_path):
     return res
 
 
-def select_bug_issue():
-    res = []
-    issues = {}
-    with open('data/issues.json', 'r') as f:
-        for i in f:
-            dic = json.loads(i)
-            _id = dic['repo_name']+'_'+str(dic['number'])
-            issues[_id] = dic
-
-    bug_set = set()
-    with open('data/issue_labels.json', 'r') as f:
-        for i in f:
-            dic = json.loads(i)
-            if "bug" in dic['name']:
-                bug_set.add(dic['name'])
-                _id = dic['repo_name']+'_'+str(dic['number'])
-                try:
-                    res.append(issues[_id])
-                except Exception:
-                    print(_id)
-
-    # print(bug_set)
-    write_json_list(res, 'data/bug_issues.json')
-
-
-def add_event_to_issues(issue_path, event_path, _type):
-    issues = {}
-    with open(issue_path, 'r') as f:
-        for i in f:
-            dic = json.loads(i)
-            dic['events'] = []
-            _id = dic['repo_name'] + '_' + str(dic['number'])
-            issues[_id] = dic
-
-
-    with open(event_path, 'r') as f:
-        for i in f:
-            dic = json.loads(i)
-            _id = dic['repo_name'] + '_' + str(dic['number'])
-            if _id not in issues:
-                continue
-            try:
-                temp = {'event_type': dic['data']["__typename"], 'created_at': dic['data']['createdAt']}
-                try:
-                    temp['actor'] = dic['data']['actor']['login']
-                except Exception:
-                    temp['actor'] = None
-            except Exception:
-                if dic['data']["__typename"] == 'PullRequestCommit':
-                    temp = {'event_type': dic['data']["__typename"], 'created_at': '1970-01-01', 'commit': dic['data']['commit']}
-                    issues[_id]['events'].append(temp)
-                    continue
-
-
-            if dic['data']["__typename"] in ["AssignedEvent", 'UnassignedEvent']:
-                if _type == 'issue':
-                    temp['event_type'] = 'I_' + dic['data']["__typename"]
-                else:
-                    temp['event_type'] = 'P_' + dic['data']["__typename"]
-                try:
-                    temp['assignee'] = dic['data']['assignee']['login']
-                except Exception:
-                    temp['assignee'] = None
-            elif dic['data']["__typename"] == "CrossReferencedEvent":
-                if dic['data']['isCrossRepository'] is True:
-                    continue
-                if _type == 'issue':
-                    temp['linked_pr'] = dic['data']['source']['number']
-                else:
-                    temp['linked_issue'] = dic['data']['source']['number']
-            elif dic['data']["__typename"] in ['ReferencedEvent']:
-                try:
-                    temp['commit'] = dic['data']['commit']
-                except Exception:
-                    continue
-            elif dic['data']["__typename"] in ['LabeledEvent', 'UnlabeledEvent']:
-                temp['label'] = dic['data']['label']['name']
-            elif dic['data']['__typename'] in ['ClosedEvent', 'MergedEvent', 'ReopenedEvent', 'MarkedAsDuplicateEvent', 'HeadRefForcePushedEvent', 'BaseRefForcePushedEvent']:
-                if _type == 'issue':
-                    temp['event_type'] = 'I_' + dic['data']["__typename"]
-                else:
-                    temp['event_type'] = 'P_' + dic['data']["__typename"]
-            elif dic['data']['__typename'] in ['IssueComment']:
-                continue
-            # else:
-                # continue
-            issues[_id]['events'].append(temp)
-
-    res = []
-    for i in issues:
-        issues[i]['events'] = sorted(issues[i]['events'], key=lambda k: k['created_at'])
-        res.append(issues[i])
-    if _type == 'issue':
-        write_json_list(res, 'data/bug_issues_with_events.json')
-    else:
-        write_json_list(res, 'data/prs_with_events.json')
-
-
 def add_comment_to_issues(issue_path, comment_path):
     issues = {}
     with open(issue_path, 'r') as f:
@@ -317,184 +285,41 @@ def add_comment_to_issues(issue_path, comment_path):
     write_json_list(res, issue_path)
 
 
-def select_issue_with_code(issue_path, pr_path, write_path):
-    pr_set = set()
-    with open(pr_path, 'r') as f:
-        for i in f:
-            dic = json.loads(i)
-            _id = dic['repo_name'] + '_' + str(dic['number'])
-            pr_set.add(_id)
-    issue_set = set()
-    with open(issue_path, 'r') as f:
-        for i in f:
-            dic = json.loads(i)
-            _id = dic['repo_name'] + '_' + str(dic['number'])
-            issue_set.add(_id)
-    issues_linked_pr = get_cross_reference(issue_path, pr_set)
-    prs_linked_issue = get_cross_reference(pr_path, issue_set)
-    for i in prs_linked_issue:
-        repo = i.split('_')[0]
-        number = int(i.split('_')[1])
-        for u in prs_linked_issue[i]:
-            _id = repo+'_'+str(u)
-            if _id not in issues_linked_pr:
-                issues_linked_pr[_id] = set()
-            issues_linked_pr[_id].add(number)
-    issues_commit = get_issue_commit(issue_path)
-    prs_commit = get_issue_commit(pr_path, _type='pr')
+def add_commitDiff_to_issues():
+    commit_loc = load_json_dict(data_dir+'commits_loc.json')
+    bug_fix = load_json_list(data_dir+'closed_bug_fix.json')
+
     res = []
-    with open(issue_path, 'r') as f:
-        for i in f:
-            dic = json.loads(i)
-            _id = dic['repo_name'] + '_' + str(dic['number'])
-            dic['linked_pr'] = []
-            dic['linked_commit'] = set()
-            if _id in issues_commit and len(issues_commit[_id]) > 0:
-                dic['linked_commit'] = issues_commit[_id]
-            if _id in issues_linked_pr and len(issues_linked_pr[_id]) > 0:
-                dic['linked_pr'] = list(issues_linked_pr[_id])
-                for p in dic['linked_pr']:
-                    _id = dic['repo_name'] + '_' + str(p)
-                    try:
-                        dic['linked_commit'] = dic['linked_commit'].union(prs_commit[_id])
-                    except Exception:
-                        continue
-            dic['linked_commit'] = list(dic['linked_commit'])
-            if len(dic['linked_commit']) > 0:
-                res.append(dic)
-    write_json_list(res, write_path)
+    for i in bug_fix:
+        i['LOC'] = 0
+        for e in range(0, len(i['action_sequence'])):
+            if i['action_sequence'][e]['event_type'] == 'ReferencedEvent':
+                i['action_sequence'][e]['supple_data']['loc'] = 0
+                try:
+                    sha = i['action_sequence'][e]['supple_data']['oid']
+                    i['action_sequence'][e]['supple_data']['loc'] = commit_loc[sha]['total']
+                except:
+                    pass
+                i['LOC'] += i['action_sequence'][e]['supple_data']['loc']
+            elif i['action_sequence'][e]['event_type'] == 'PullRequestEvent':
+                sub_events = i['action_sequence'][e]['sub_event']
+                for m in range(0, len(sub_events)):
+                    if sub_events[m]['event_type'] == 'PullRequestCommit':
+                        sub_events[m]['supple_data']['loc'] = 0
+                        try:
+                            sha = sub_events[m]['supple_data']['oid']
+                            sub_events[m]['supple_data']['loc'] = commit_loc[sha]['total']
+                        except:
+                            pass
+                        i['LOC'] += sub_events[m]['supple_data']['loc']
+                i['action_sequence'][e]['sub_event'] = sub_events
 
-
-
-def get_cross_reference(issue_path, pr_set):
-    issues_link = {}
-    with open(issue_path, 'r') as f:
-        for i in f:
-            dic = json.loads(i)
-            _id = dic['repo_name'] + '_' + str(dic['number'])
-            for e in dic['events']:
-                if e['event_type'] == 'CrossReferencedEvent':
-                    if _id not in issues_link:
-                        issues_link[_id] = set()
-                    if 'linked_pr' in e:
-                        pr_id = dic['repo_name'] + '_'+str(e['linked_pr'])
-                        if pr_id in pr_set:
-                            issues_link[_id].add(e['linked_pr'])
-                    elif 'linked_issue' in e:
-                        pr_id = dic['repo_name'] + '_' + str(e['linked_issue'])
-                        if pr_id in pr_set:
-                            issues_link[_id].add(e['linked_issue'])
-    return issues_link
-
-
-def get_issue_commit(issue_path, _type='issue'):
-    issues_commit = {}
-    data = load_json_list(issue_path)
-    for dic in data:
-        _id = dic['repo_name'] + '_'+str(dic['number'])
-        if _id not in issues_commit:
-            issues_commit[_id] = set()
-        for e in dic['events']:
-            if _type == 'issue':
-                if e['event_type'] == 'ReferencedEvent' and 'commit' in e:
-                    issues_commit[_id].add(e['commit']['oid'])
-            elif _type == 'pr':
-                if e['event_type'] == 'PullRequestCommit' and 'commit' in e:
-                    issues_commit[_id].add(e['commit']['oid'])
-    return issues_commit
-
-
-
-def map_cross_reference(issues_link, prs_link):
-    # print(len(issues_link))
-    issue_pr_map = {}
-    modified_issues_link = {}
-    for i in issues_link:
-        modified_issues_link[i] = []
-        for j in issues_link[i]:
-            if j > i:
-                modified_issues_link[i].append(j)
-        if len(modified_issues_link[i]) == 1:
-            issue_pr_map[i] = modified_issues_link[i]
-        elif len(modified_issues_link[i]) > 1:
-            # print(i, modified_issues_link[i])
-            for j in modified_issues_link[i]:
-                if j in prs_link and i in prs_link[j]:
-                    if i in issue_pr_map:
-                        issue_pr_map[i].append(j)
-                    else:
-                        issue_pr_map[i] = [j]
-    return issue_pr_map
-
-
-def select_closed_issue(path):
-    res = []
-    with open(path, 'r') as f:
-        for i in f:
-            dic = json.loads(i)
-            flag = False
-            for e in dic['events']:
-                if 'ClosedEvent' in e['event_type']:
-                    flag = True
-                elif 'ReopenedEvent' in e['event_type']:
-                    flag = False
-            if flag:
-                res.append(dic)
-    write_json_list(res, 'data/closed_bug_issues.json')
-
-
-def add_commitDiff_to_issues(issue_path, commitDiff_path, write_path):
-    issues = load_json_list(issue_path)
-    abnormal_issues = load_json_list('data/abnormal_issues.json')
-    delete_issues = {}
-    for i in abnormal_issues:
-        delete_issues[i['number']] = i['repo_name']
-    commitDiffs = {}
-    with open(commitDiff_path, 'r') as f:
-        for i in f:
-            dic = json.loads(i)
-            commitDiffs[dic['sha']] = {'add': dic['data']['add'], 'del': dic['data']['del']}
-    res = []
-    not_found = set()
-    for i in issues:
-        if i['number'] in delete_issues and i['repo_name'] == delete_issues[i['number']]:
-            continue
-        i['LOC'] = []
-        for c in i['linked_commit']:
-            try:
-                i['LOC'].append(commitDiffs[c])
-            except Exception:
-                i['LOC'].append({'add': 0, 'del': 0})
-                not_found.add(c)
         res.append(i)
-    print(len(not_found))
-    # write_json_data(list(not_found), 'data/can_not_found_commit.json')
-    write_json_list(res, write_path)
+    write_json_list(res, data_dir+'c_bug_fix_with_loc.json')
 
 
-def integrate_issue_and_prs(issue_path, pr_path, write_path):
-    prs = {}
-    with open(pr_path, 'r') as f:
-        for i in f:
-            dic = json.loads(i)
-            _id = dic['repo_name']+'_'+str(dic['number'])
-            prs[_id] = dic
-    res_i = []
-    issues = load_json_list(issue_path)
-    for i in issues:
-        for p in i['linked_pr']:
-            _id = i['repo_name']+'_'+str(p)
-            temp = { 'event_type': 'PullRequestEvent', 'created_at': prs[_id]['created_at'], 'actor': prs[_id]['author']}
-            i['events'].append(temp)
-        res_e = []
-        for e in i['events']:
-            if e['event_type'] == 'CrossReferencedEvent' and e['linked_pr'] in i['linked_pr']:
-                continue
-            res_e.append(e)
-        i['events'] = sorted(res_e, key=lambda k: k['created_at'])
-        res_i.append(i)
 
-    write_json_list(res_i, write_path)
+
 
 
 def delete_merge_commit(commitDiff_path):

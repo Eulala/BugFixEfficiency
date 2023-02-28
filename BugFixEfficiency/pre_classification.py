@@ -1,25 +1,23 @@
 import random
-
+import preprocess
 from util import *
 from output import *
 
 
-def calculate_issue_loc(issue_path):
+def calculate_issue_loc():
+    abnormal = 0
     res = {}
-    data = load_json_list(issue_path)
-    for d in data:
+    bug_fix = load_json_list(preprocess.data_dir + 'c_bug_fix_with_loc.json')
+    for d in bug_fix:
         if d['repo_name'] not in res:
             res[d['repo_name']] = {}
-        if len(d['LOC']) > 0:
-            _id = d['number']
-            temp = { 'add': 0, 'del': 0, 'all': 0 }
-            for l in d['LOC']:
-                temp['add'] = temp['add'] + l['add']
-                temp['del'] = temp['del'] + l['del']
-            temp['all'] = temp['add'] + temp['del']
-            if temp['all'] == 0:
+        _id = d['target']['number']
+        if d['LOC'] > 0:
+            if d['LOC'] > 10000:
+                abnormal += 1
                 continue
-            res[d['repo_name']][_id] = temp
+            res[d['repo_name']][_id] = d['LOC']
+    print("{} issues' LOC > 10000".format(abnormal))
     return res
 
 
