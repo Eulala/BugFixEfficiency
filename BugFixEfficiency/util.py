@@ -12,6 +12,40 @@ from sklearn.cluster import KMeans
 import configparser
 from myMongo import *
 
+Global_val = { 'mongo_config': {'ip': '', 'port': 0, 'username': '', 'pwd': '', 'db_name': ''},
+               'data_dir': '', 'figure_dir': '',
+               'commit_dir': ''}
+
+
+def initialize():
+    config = load_config()
+    global Global_val
+    set_global_val('data_dir', config['DataPath']['root_dir'])
+    # Global_val['data_dir'] = config['DataPath']['root_dir']
+    if not os.path.exists(Global_val['data_dir']):
+        os.mkdir(Global_val['data_dir'])
+
+    set_global_val('figure_dir', config['DataPath']['figure_dir'])
+    if not os.path.exists(Global_val['figure_dir']):
+        os.mkdir(Global_val['figure_dir'])
+
+    set_global_val('commit_dir', config['DataPath']['commit_dir'])
+    if not os.path.exists(Global_val['commit_dir']):
+        raise ValueError('no such commit dir')
+
+    mongo = config['MongoDB']
+    set_global_val('mongo_config', {'ip': mongo['ip'], 'port': int(mongo['port']), 'username': mongo['username'],
+                                    'pwd': mongo['pwd'], 'db_name': mongo['db_name']})
+
+
+def get_global_val(key):
+    return Global_val[key]
+
+
+def set_global_val(key, data):
+    global Global_val
+    Global_val[key] = data
+
 
 def write_json_list(data, filename):
     start = time.time()

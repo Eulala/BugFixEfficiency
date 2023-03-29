@@ -21,8 +21,14 @@ def draw_violin_plot(data_path, save_path):
 
 
 if __name__ == '__main__':
-    initialize()
-    select_closed_issue()
+    myclient = pymongo.MongoClient("mongodb://ro_user:ro_123456@172.27.135.32:27017/test?authSource=ghdb&readPreference=primary&appname=MongoDB%20Compass&directConnection=true&ssl=false")
+    db = myclient['ghdb']
+    col = db['sponsor']
+    for c in col.find():
+        print(c)
+        break
+    # initialize()
+    # select_closed_issue()
     exit(-1)
     # with open(r'data/closed_bug_fix.json', 'r') as f:
     #     for i in f:

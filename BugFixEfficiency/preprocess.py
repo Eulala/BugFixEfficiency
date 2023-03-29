@@ -3,30 +3,7 @@ from bs4 import BeautifulSoup
 import nltk
 
 # state_map = {'new': 1, 'comprehended': 2, 'assigned': 3, 'proposed': 4, 'passed': 5, 'closed': 6, 'failed': 7, 'discussed': 8}
-mongo_config = {'ip': '', 'port': 0, 'username': '', 'pwd': '', 'db_name': ''}
-data_dir = ''
-commit_dir = ''
-
-
-def initialize():
-    config = load_config()
-    global data_dir
-    data_dir = config['DataPath']['root_dir']
-    if not os.path.exists(data_dir):
-        os.mkdir(data_dir)
-
-    global commit_dir
-    commit_dir = config['DataPath']['commit_dir']
-    if not os.path.exists(commit_dir):
-        raise ValueError('no such commit dir')
-
-    mongo = config['MongoDB']
-    global mongo_config
-    mongo_config['ip'] = mongo['ip']
-    mongo_config['port'] = int(mongo['port'])
-    mongo_config['username'] = mongo['username']
-    mongo_config['pwd'] = mongo['pwd']
-    mongo_config['db_name'] = mongo['db_name']
+bots = { 'tensorflowbutler', 'google-ml-butler', 'tensorflow-bot' }
 
 
 def extract_raw_data():
@@ -37,7 +14,8 @@ def extract_raw_data():
     # data = mongo_c.get_col_value(col_name='bug_fix', cond={'repo_name': {"$in": ['tensorflow/tensorflow', 'ansible/ansible']}})
     # write_json_list(data, data_dir + 'bug_fix.json')
     # mongo_c.close()
-
+    mongo_config = get_global_val('mongo_config')
+    data_dir = get_global_val('data_dir')
     mongo_c = MyMongo(mongo_config['ip'], 'sbh', 'sbh123456', port=int(mongo_config['port']))
     mongo_c.set_db_name('ghdb')
     mongo_c.connect()
@@ -50,6 +28,7 @@ def extract_raw_data():
 
 
 def find_commit_repo():
+    data_dir = get_global_val('data_dir')
     res = {}
     issue_events = load_json_list(data_dir+'issue_events.json')
     for i in issue_events:
@@ -75,6 +54,7 @@ def find_commit_repo():
 
 
 def get_commit_list():
+    data_dir = get_global_val('data_dir')
     if os.path.exists(data_dir+'commit_list.json'):
         commits = load_json_list(data_dir+'commit_list.json')
         commits = set(commits)
@@ -96,6 +76,8 @@ def get_commit_list():
 
 
 def select_commits(commit_list):
+    commit_dir = get_global_val('commit_dir')
+    data_dir = get_global_val('data_dir')
     res = {}
     files = os.listdir(commit_dir)
     files = list(filter(lambda f: 'enrich' not in f, files))
@@ -108,7 +90,94 @@ def select_commits(commit_list):
     write_json_dict(res, data_dir+'commits.json')
 
 
+def calculate_fix_time():
+    data_dir = get_global_val('data_dir')
+    data = load_json_list(data_dir+'c_bug_fix_with_loc.json')
+    res = []
+    for i in data:
+        begin_at = i['occur_at']
+        end_at = begin_at
+        for e in i['action_sequence']:
+            actor = e['actor']
+            if actor is not None:
+                if 'bot' in actor.lower() or actor in bots:
+                    continue
+            end_at = e['occur_at']
+
+        delta_t = calculate_delta_t(begin_at, end_at)
+        res.append({'repo': i['repo_name'], 'number': i['target']['number'], 'fix_time': delta_t})
+
+    write_json_list(res, data_dir+'bug_fix_time.json')
+
+
+def normalize_fix_time():
+    data_dir = get_global_val('data_dir')
+    data = load_json_list(data_dir + 'bug_fix_time.json')
+
+    temp = {}
+    for i in data:
+        if i['repo'] not in temp:
+            temp[i['repo']] = []
+        temp[i['repo']].append(i['fix_time'])
+
+    _max = {'tensorflow/tensorflow': max(temp['tensorflow/tensorflow']), 'ansible/ansible': max(temp['ansible/ansible'])}
+    _min = {'tensorflow/tensorflow': min(temp['tensorflow/tensorflow']), 'ansible/ansible': min(temp['ansible/ansible'])}
+
+    res = []
+    for i in data:
+        i['fix_time'] = (i['fix_time'] - _min[i['repo']])/(_max[i['repo']] - _min[i['repo']])
+        res.append(i)
+
+    write_json_list(res, data_dir+'bug_fix_time_nor.json')
+
+
+
+def set_efficiency():
+    data_dir = get_global_val('data_dir')
+    data = load_json_list(data_dir + 'bug_fix_time_nor.json')
+    data = sorted(data, key=lambda x: x['fix_time'])
+    median_k = math.ceil(len(data)/2) - 1
+    res = []
+    for i in range(len(data)):
+        if i < median_k:
+            data[i]['efficiency'] = 'high'
+        elif i > median_k:
+            data[i]['efficiency'] = 'low'
+        res.append(data[i])
+
+    write_json_list(res, data_dir+'bug_fix_with_efficiency.json')
+
+
+def generate_sequence():
+    data_dir = get_global_val('data_dir')
+    bug_fix = load_json_list(data_dir+'c_bug_fix_with_loc.json')
+    efficiency = load_json_list(data_dir + 'bug_fix_with_efficiency.json')
+    b_eff = {}
+    for i in efficiency:
+        try:
+            _id = i['repo'][0] + '_' + str(i['number'])
+            b_eff[_id] = i['efficiency']
+        except Exception:
+            pass  # median
+
+
+    sequences = {'high': [], 'low': []}
+    for b in bug_fix:
+        temp = { '_id': b['repo_name'][0] + '_' + str(b['target']['number']), 'action_sequence': []}
+        for a in b['action_sequence']:
+            temp['action_sequence'].append({'event_type': a['event_type'], 'occur_at': a['occur_at']})
+        try:
+            eff = b_eff[temp['_id']]
+            sequences[eff].append(temp)
+        except Exception:
+            pass  # median
+
+    for eff in sequences:
+        write_json_list(sequences[eff], data_dir+'bug_fix_sequences_' + eff + '.json')
+
+
 def select_no_data_commits(commit_list):
+    data_dir = get_global_val('data_dir')
     commits = load_json_dict(data_dir+'commits.json')
     exists = set()
     for c in commits:
@@ -157,6 +226,7 @@ def select_no_data_commits(commit_list):
 
 
 def select_closed_issue():
+    data_dir = get_global_val('data_dir')
     res = []
     with open(data_dir+'bug_fix.json', 'r') as f:
         for i in f:
@@ -168,6 +238,7 @@ def select_closed_issue():
 
 
 def generate_commit_loc():
+    data_dir = get_global_val('data_dir')
     res = {}
     commits = load_json_list(data_dir+'commits.json')
     for i in commits:
@@ -316,7 +387,6 @@ def add_commitDiff_to_issues():
 
         res.append(i)
     write_json_list(res, data_dir+'c_bug_fix_with_loc.json')
-
 
 
 

@@ -80,7 +80,7 @@ def KMedians(data, n_clusters, max_iter):
     return labels
 
 
-def cluster_by_complexity(issue_data, write_path):
+def cluster_by_complexity(issue_data):
     issue_map = {}
     data = {}
     for repo in issue_data:
@@ -119,7 +119,7 @@ def cluster_by_complexity(issue_data, write_path):
         # issue_map[repo] = new_map
     # print(issue_map)
     # exit(-1)
-    with open(write_path, 'w') as f:
+    with open(preprocess.data_dir+'bug_fix_cluster.json', 'w') as f:
         f.write(json.dumps(issue_map))
 
 

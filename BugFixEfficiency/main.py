@@ -1,9 +1,5 @@
-# This is a sample Python script.
-
-# Press Shift+F10 to execute it or replace it with your code.
-# Press Double Shift to search everywhere for classes, files, tool windows, actions, and settings.
-
 from preprocess import *
+from process_mining import *
 from bug_fix_efficiency_classify import *
 from contrast_sequential_pattern_mining import *
 import matplotlib.pyplot as plt
@@ -13,6 +9,7 @@ from pre_classification import *
 
 if __name__ == '__main__':
     initialize()
+
     # extract_raw_data()
     # find_commit_repo()
     # commits = get_commit_list()
@@ -21,11 +18,17 @@ if __name__ == '__main__':
 
     # generate_commit_loc()
     # add_commitDiff_to_issues()
-    issues_loc = calculate_issue_loc()
-    cluster_by_complexity(issues_loc, 'data/issue_clusters.json')
-    exit(-1)
+    # calculate_fix_time()
+    # normalize_fix_time()
+    # set_efficiency()
+    # generate_sequence()
+    # translate_sequences()
+    load_event_log()
 
 
+
+    # issues_loc = calculate_issue_loc()
+    # cluster_by_complexity(issues_loc)
     #
     # generate_bug_fix_features('data/closed_bug_fix.json', 'data/closed_bug_fix_efficiency.json')
     # bug_fix_efficiency = load_json_data('data/closed_bug_fix_efficiency.json')
@@ -36,11 +39,12 @@ if __name__ == '__main__':
 
     # sequential pattern mining
     # generate_event_id(['data/closed_bug_fix.json'], 'data/event_id.json')
-    generate_input_sequence(['data/clusters_features.csv',
-                             'data/closed_bug_fix.json',
-                             'data/event_id.json'],
-                            'data/closed_bug_fix_sequences.json')
-    mining_CSP('data/closed_bug_fix_sequences.json', min_cr=2)
+
+    # generate_input_sequence(['data/clusters_features.csv',
+    #                          'data/closed_bug_fix.json',
+    #                          'data/event_id.json'],
+    #                         'data/closed_bug_fix_sequences.json')
+    # mining_CSP('data/closed_bug_fix_sequences.json', min_cr=2)
 
     # for i in range(0, 3):
     #     remove_subsequence_csp(r'data/'+str(i)+'CSP_results.csv', r'data/'+str(i)+'CSP_remained.csv')
