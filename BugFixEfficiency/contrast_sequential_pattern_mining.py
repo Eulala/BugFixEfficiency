@@ -1,28 +1,5 @@
 from util import *
 
-
-def generate_event_id(read_path, write_path):
-    event_sequences_set = []
-    for r in read_path:
-        for d in load_json_list(r):
-            event_sequences_set = event_sequences_set + d['events']
-
-    event_types = set()
-    for event in event_sequences_set:
-        event_types.add(event['event_type'])
-
-    event_id = dict(zip(event_types, range(len(event_types))))
-
-    # mapping the alphabet
-    for e in event_id:
-        if event_id[e] < 26:
-            event_id[e] = chr(ord('A')+event_id[e])
-        else:
-            event_id[e] = chr(ord('a')+event_id[e]-26)
-    with open(write_path, 'w') as f:
-        f.write(json.dumps(event_id))
-
-
 def generate_input_sequence(read_path: list, write_path):
     # read_path: arg1 = cluster_features_path, arg2 = issue_path (with events), arg3 = event_id_path
     clusters = pd.read_csv(read_path[0])

@@ -3,7 +3,7 @@ from bs4 import BeautifulSoup
 import nltk
 
 # state_map = {'new': 1, 'comprehended': 2, 'assigned': 3, 'proposed': 4, 'passed': 5, 'closed': 6, 'failed': 7, 'discussed': 8}
-bots = { 'tensorflowbutler', 'google-ml-butler', 'tensorflow-bot' }
+bots = { 'tensorflowbutler', 'google-ml-butler', 'tensorflow-bot', 'ansible', 'ansibot'}
 
 
 def extract_raw_data():
@@ -92,7 +92,7 @@ def select_commits(commit_list):
 
 def calculate_fix_time():
     data_dir = get_global_val('data_dir')
-    data = load_json_list(data_dir+'c_bug_fix_with_loc.json')
+    data = load_json_list(data_dir+'c_bug_fix.json')
     res = []
     for i in data:
         begin_at = i['occur_at']
@@ -150,7 +150,7 @@ def set_efficiency():
 
 def generate_sequence():
     data_dir = get_global_val('data_dir')
-    bug_fix = load_json_list(data_dir+'c_bug_fix_with_loc.json')
+    bug_fix = load_json_list(data_dir+'c_bug_fix.json')
     efficiency = load_json_list(data_dir + 'bug_fix_with_efficiency.json')
     b_eff = {}
     for i in efficiency:
@@ -160,13 +160,25 @@ def generate_sequence():
         except Exception:
             pass  # median
 
-
+    concurrent_events = {}
     sequences = {'high': [], 'low': []}
     for b in bug_fix:
+        mention_time = set()
         temp = { '_id': b['repo_name'][0] + '_' + str(b['target']['number']), 'action_sequence': []}
         for a in b['action_sequence']:
+            if a['event_type'] == 'MentionedEvent':
+                mention_time.add(a['occur_at'])
             temp['action_sequence'].append({'event_type': a['event_type'], 'occur_at': a['occur_at']})
         try:
+            del_index = []
+            index = 0
+            for a in temp['action_sequence']:
+                if a['event_type'] == 'SubscribedEvent' and a['occur_at'] in mention_time:
+                    del_index.append(index)
+                index += 1
+            del_index.reverse()
+            for i in del_index:
+                temp['action_sequence'].pop(i)
             eff = b_eff[temp['_id']]
             sequences[eff].append(temp)
         except Exception:
@@ -258,6 +270,36 @@ def generate_commit_loc():
         res[i['sha']] = temp
 
     write_json_dict(res, data_dir+'commits_loc.json')
+
+
+def modify_pr_occur():
+    data_dir = get_global_val('data_dir')
+    data = load_json_list(data_dir+'c_bug_fix_with_loc.json')
+    res = []
+    for d in data:
+        issue_num = d['target']['number']
+        issue_repo = d['repo_name']
+        for i in range(len(d['action_sequence'])):
+            if d['action_sequence'][i]['event_type'] == 'PullRequestEvent':
+                for e in d['action_sequence'][i]['sub_event']:
+                    if e['event_type'] == 'CrossReferencedEvent' and e['supple_data']['number'] == issue_num and e['supple_data']['repo_name'] == issue_repo:
+                        # print(d['action_sequence'][i]['occur_at'], e['occur_at'])
+                        d['action_sequence'][i]['occur_at'] = e['occur_at']
+                        break
+        d['action_sequence'] = sorted(d['action_sequence'], key=lambda k: k['occur_at'])
+
+        I_occur = 0
+        for i in range(len(d['action_sequence'])):
+            if d['action_sequence'][i]['event_type'] == 'RaiseIssueEvent':
+                break
+            I_occur += 1
+        del d['action_sequence'][0:I_occur]
+
+        for a in d['action_sequence']:
+            if a['event_type'] in ['PullRequestEvent', 'ReferencedEvent']:
+                res.append(d)
+                break
+    write_json_list(res, data_dir + 'c_bug_fix.json')
 
 
 

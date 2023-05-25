@@ -18,12 +18,20 @@ if __name__ == '__main__':
 
     # generate_commit_loc()
     # add_commitDiff_to_issues()
+
+    # modify_pr_occur()
     # calculate_fix_time()
     # normalize_fix_time()
     # set_efficiency()
     # generate_sequence()
-    # translate_sequences()
-    load_event_log()
+    # translate_sequences(['LockedEvent'])  # for process mining
+
+    # if_event = find_infrequent_event()
+    # translate_sequences(['LockedEvent']+list(if_event))
+    # load_event_log()
+    # get_event_duration()
+    # calculate_statics()
+    generate_graph()
 
 
 

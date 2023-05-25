@@ -65,6 +65,14 @@ def write_json_dict(data, filename):
     print('write {} lines to {} runtime: {}'.format(len(data), filename, end-start))
 
 
+def write_json_data(data, filename):
+    start = time.time()
+    with open(filename, 'w') as f:
+        f.write(json.dumps(data))
+    end = time.time()
+    print('write {} lines to {} runtime: {}'.format(len(data), filename, end-start))
+
+
 def load_json_list(filename):
     start = time.time()
     data = []
@@ -84,6 +92,17 @@ def load_json_dict(filename):
         for i in f:
             dic = json.loads(i)
             data[dic['_id']] = dic['data']
+    end = time.time()
+    print('load {} lines from {} runtime: {}'.format(len(data), filename, end-start))
+    return data
+
+
+def load_json_data(filename):
+    start = time.time()
+    data = {}
+    with open(filename, 'r') as f:
+        for i in f:
+            data = json.loads(i)
     end = time.time()
     print('load {} lines from {} runtime: {}'.format(len(data), filename, end-start))
     return data
@@ -143,6 +162,19 @@ def delete_outlier(data, index):
             count = count + 1
 
     return res, new_index
+
+
+def generate_event_id(events, write_path):
+    event_id = dict(zip(events, range(len(events))))
+
+    # mapping the alphabet
+    for e in event_id:
+        if event_id[e] < 26:
+            event_id[e] = chr(ord('A')+event_id[e])
+        else:
+            event_id[e] = chr(ord('a')+event_id[e]-26)
+
+    write_json_data(event_id, write_path)
 
 
 def create_config():

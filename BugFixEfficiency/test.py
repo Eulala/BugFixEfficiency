@@ -21,6 +21,16 @@ def draw_violin_plot(data_path, save_path):
 
 
 if __name__ == '__main__':
+    data = load_json_list('data/c_bug_fix.json')
+    res = []
+    for i in data:
+        for a in i['action_sequence']:
+            if a['event_type'] in ['PullRequestEvent', 'ReferencedEvent']:
+                res.append(i)
+                break
+    print(len(res))
+
+    exit(-1)
     myclient = pymongo.MongoClient("mongodb://ro_user:ro_123456@172.27.135.32:27017/test?authSource=ghdb&readPreference=primary&appname=MongoDB%20Compass&directConnection=true&ssl=false")
     db = myclient['ghdb']
     col = db['sponsor']
