@@ -164,17 +164,17 @@ def delete_outlier(data, index):
     return res, new_index
 
 
-def generate_event_id(events, write_path):
-    event_id = dict(zip(events, range(len(events))))
-
-    # mapping the alphabet
-    for e in event_id:
-        if event_id[e] < 26:
-            event_id[e] = chr(ord('A')+event_id[e])
-        else:
-            event_id[e] = chr(ord('a')+event_id[e]-26)
-
-    write_json_data(event_id, write_path)
+# def generate_event_id(events, write_path):
+#     event_id = dict(zip(events, range(len(events))))
+#
+#     # mapping the alphabet
+#     for e in event_id:
+#         if event_id[e] < 26:
+#             event_id[e] = chr(ord('A')+event_id[e])
+#         else:
+#             event_id[e] = chr(ord('a')+event_id[e]-26)
+#
+#     write_json_data(event_id, write_path)
 
 
 def create_config():

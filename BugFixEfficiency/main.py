@@ -25,13 +25,14 @@ if __name__ == '__main__':
     # set_efficiency()
     # generate_sequence()
     # translate_sequences(['LockedEvent'])  # for process mining
+    generate_input_sequence()  # for sequence mining
 
     # if_event = find_infrequent_event()
     # translate_sequences(['LockedEvent']+list(if_event))
     # load_event_log()
     # get_event_duration()
     # calculate_statics()
-    generate_graph()
+    # generate_graph()
 
 
 

@@ -1,49 +1,104 @@
 from util import *
 
-def generate_input_sequence(read_path: list, write_path):
-    # read_path: arg1 = cluster_features_path, arg2 = issue_path (with events), arg3 = event_id_path
-    clusters = pd.read_csv(read_path[0])
-    bug_issues = load_json_list(read_path[1])
-    event_id = {}
-    with open(read_path[2], 'r') as f:
-        for i in f:
-            event_id = json.loads(i)
 
-    bug_fix = {}
-    for i in bug_issues:
-        number = i['number']
-        repo = i['repo_name']
-        try:
-            cluster = clusters.loc[(clusters['repo_name'] == repo) & (clusters['number'] == number)]
-            cluster = cluster['cluster'].tolist()[0]
-            e_level = clusters.loc[(clusters['repo_name'] == repo) & (clusters['number'] == number)]
-            e_level = e_level['efficiency_level'].tolist()[0]
-            if cluster not in bug_fix:
-                bug_fix[cluster] = {}
-            if e_level not in bug_fix[cluster]:
-                bug_fix[cluster][e_level] = []
-            temp = {'number': number, 'repo_name': repo, 'sequence': generate_event_sequence(i['events'], event_id)}
-            bug_fix[cluster][e_level].append(temp)
-        except Exception:
-            continue
+# def generate_input_sequence(read_path: list, write_path):
+#     # read_path: arg1 = cluster_features_path, arg2 = issue_path (with events), arg3 = event_id_path
+#     clusters = pd.read_csv(read_path[0])
+#     bug_issues = load_json_list(read_path[1])
+#     event_id = {}
+#     with open(read_path[2], 'r') as f:
+#         for i in f:
+#             event_id = json.loads(i)
+#
+#     bug_fix = {}
+#     for i in bug_issues:
+#         number = i['number']
+#         repo = i['repo_name']
+#         try:
+#             cluster = clusters.loc[(clusters['repo_name'] == repo) & (clusters['number'] == number)]
+#             cluster = cluster['cluster'].tolist()[0]
+#             e_level = clusters.loc[(clusters['repo_name'] == repo) & (clusters['number'] == number)]
+#             e_level = e_level['efficiency_level'].tolist()[0]
+#             if cluster not in bug_fix:
+#                 bug_fix[cluster] = {}
+#             if e_level not in bug_fix[cluster]:
+#                 bug_fix[cluster][e_level] = []
+#             temp = {'number': number, 'repo_name': repo, 'sequence': generate_event_sequence(i['events'], event_id)}
+#             bug_fix[cluster][e_level].append(temp)
+#         except Exception:
+#             continue
+#
+#     write_json_list([bug_fix], write_path)
 
-    write_json_list([bug_fix], write_path)
+def generate_event_id(write_path, ignore_events=set()):
+    data_dir = get_global_val('data_dir')
+    event_set = set()
+    for eff in ['high', 'low']:
+        data = load_json_list(data_dir + 'bug_fix_sequences_' + eff + '.json')
+        for i in data:
+            events = i['action_sequence']
+            for e in events:
+                if e['event_type'] not in ignore_events:
+                    event_set.add(e['event_type'])
+
+    event_id = dict(zip(event_set, range(len(event_set))))
+
+    # mapping the alphabet
+    for e in event_id:
+        if event_id[e] < 26:
+            event_id[e] = chr(ord('A') + event_id[e])
+        else:
+            event_id[e] = chr(ord('a') + event_id[e] - 26)
+
+    write_json_data(event_id, write_path)
 
 
-def generate_event_sequence(events, event_id):
-    res = ''
-    for e in events:
-        if e['event_type'] == 'I_ReportedEvent':
-            continue
-        _id = event_id[e['event_type']]
-        res = res + _id
-    return res
+def generate_input_sequence():
+    data_dir = get_global_val('data_dir')
+
+    ignore_events = {'LockedEvent'}
+
+    if not os.path.exists(data_dir + 'event_id.json'):
+        generate_event_id(data_dir + 'event_id.json', ignore_events=ignore_events)
+
+    event_id = load_event_id(data_dir + 'event_id.json')
+
+    input_sequences = {}
+    for eff in ['low', 'high']:
+        input_sequences[eff] = []
+        data = load_json_list(data_dir + 'bug_fix_sequences_' + eff + '.json')
+        for d in data:
+            temp = ''
+            occur = None
+            for e in d['action_sequence']:
+                if e['event_type'] in ignore_events:
+                    continue
+                if occur is not None:
+                    d_t = calculate_delta_t(occur, e['occur_at'])
+                    temp = temp+set_duration_symbol(d_t)
+                occur = e['occur_at']
+                temp = temp + event_id[e['event_type']]
+            input_sequences[eff].append(temp)
+    write_json_dict(input_sequences, data_dir+'input_sequences.json')
+
+
+def set_duration_symbol(t):
+    # +: < 7d, -: 7~14d, *:14~28d, .:>=28d
+    if t < 7:
+        return '+'
+    elif t < 14:
+        return '-'
+    elif t < 28:
+        return '*'
+    else:
+        return '.'
 
 
 def mining_CSP(read_path, min_cr=1):
     read_data = load_json_list(read_path)[0]
     for i in read_data:
-        print("cluster: {}, sequence_num: high={}, low={}".format(i, len(read_data[i]['high']), len(read_data[i]['low'])))
+        print(
+            "cluster: {}, sequence_num: high={}, low={}".format(i, len(read_data[i]['high']), len(read_data[i]['low'])))
         data_1 = []
         data_2 = []
         for s in read_data[i]['high']:
@@ -112,19 +167,13 @@ def delete_subsequence(sequences):
                 # if CR[target] == -1 and CR[source] > 0:
                 #     print(target, source)
     print(len(delete_set), len(sequences))
-    return sequences-delete_set
+    return sequences - delete_set
 
 
-def load_event_id(path='data/event_id.json'):
-    res = set()
+def load_event_id(path):
     with open(path, 'r') as f:
-        for i in f:
-            dic = json.loads(i)
-            for e in dic:
-                if dic[e] == 'j':
-                    continue
-                res.add(dic[e])
-    return res
+        dic = json.load(f)
+        return dic
 
 
 def generate_CSP(data_1, data_2, min_cr):
@@ -133,11 +182,11 @@ def generate_CSP(data_1, data_2, min_cr):
     min_sup = int(0.05 * (len(data_1) + len(data_2)))
     # min_sup_1 = int(0.05 * len(data_1))
     # min_sup_2 = int(0.05 * len(data_2))
-    frequent_one_item_set = generate_frequent_one_item(data_1+data_2, min_sup, events)    # Find all frequent 1-item patterns
+    frequent_one_item_set = generate_frequent_one_item(data_1 + data_2, min_sup,
+                                                       events)  # Find all frequent 1-item patterns
 
     D_num_1 = len(data_1)
     D_num_2 = len(data_2)
-
 
     CSPs = []
     # Recursion
@@ -181,7 +230,7 @@ def generate_project_sequence(item, sequence: str):
 
 
 def generate_new_prefix(prev, addition):
-    return prev+addition
+    return prev + addition
 
 
 def calculate_notnull_count(data: list):
@@ -213,7 +262,8 @@ def calculate_CR(sup_1, sup_2, D_1, D_2):
 
 
 def calculate_chi_square(sup_x_1, sup_x_2, sup_y_1, sup_y_2):
-    chi = ((sup_x_1+sup_x_2+sup_y_1+sup_y_2)*math.pow((sup_x_1*sup_y_2 - sup_x_2*sup_y_1), 2))/((sup_x_1+sup_x_2)*(sup_y_1+sup_y_2)*(sup_x_1+sup_y_1)*(sup_x_2+sup_y_2))
+    chi = ((sup_x_1 + sup_x_2 + sup_y_1 + sup_y_2) * math.pow((sup_x_1 * sup_y_2 - sup_x_2 * sup_y_1), 2)) / (
+            (sup_x_1 + sup_x_2) * (sup_y_1 + sup_y_2) * (sup_x_1 + sup_y_1) * (sup_x_2 + sup_y_2))
     return chi
 
 
@@ -235,16 +285,16 @@ def DFS_CSP(current_e, item, min_sup, proj_1, proj_2, D_1, D_2, one_item_set, CS
     #     print(len_c1, len_c2)
 
     # calculate CR
-    if sup_1 + sup_2 >= 0.01*(D_1+D_2):
+    if sup_1 + sup_2 >= 0.01 * (D_1 + D_2):
         CR, _class = calculate_CR(sup_1, sup_2, D_1, D_2)
         if CR == -1 or CR >= min_cr:
-            CSPs.append({ 'CSP': item, 'CR': CR, 'Sup_1': sup_1, 'Sup_2': sup_2, 'C1_num': D_1, 'C2_num': D_2,
-                          'class': _class })
+            CSPs.append({'CSP': item, 'CR': CR, 'Sup_1': sup_1, 'Sup_2': sup_2, 'C1_num': D_1, 'C2_num': D_2,
+                         'class': _class})
 
     if len_c1 == 0 or len_c2 == 0 or sup_1 == 0 or sup_2 == 0:  # no child in one class or any support of the two classes equals 0
         return
 
-    if sup_1+sup_2 <= min_sup:  # sup(prefix) < min_sup
+    if sup_1 + sup_2 <= min_sup:  # sup(prefix) < min_sup
         return
 
     for i in one_item_set:
@@ -259,37 +309,3 @@ def DFS_CSP(current_e, item, min_sup, proj_1, proj_2, D_1, D_2, one_item_set, CS
         # print(current_e, i, sup_y_1, sup_y_2)
         # exit(-1)
         DFS_CSP(i, new_item, min_sup, d_proj_1, d_proj_2, D_1, D_2, one_item_set, CSPs, min_cr)
-
-
-
-
-    
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
