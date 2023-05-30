@@ -1,34 +1,65 @@
+import copy
+
 from util import *
 
 
-# def generate_input_sequence(read_path: list, write_path):
-#     # read_path: arg1 = cluster_features_path, arg2 = issue_path (with events), arg3 = event_id_path
-#     clusters = pd.read_csv(read_path[0])
-#     bug_issues = load_json_list(read_path[1])
-#     event_id = {}
-#     with open(read_path[2], 'r') as f:
-#         for i in f:
-#             event_id = json.loads(i)
-#
-#     bug_fix = {}
-#     for i in bug_issues:
-#         number = i['number']
-#         repo = i['repo_name']
-#         try:
-#             cluster = clusters.loc[(clusters['repo_name'] == repo) & (clusters['number'] == number)]
-#             cluster = cluster['cluster'].tolist()[0]
-#             e_level = clusters.loc[(clusters['repo_name'] == repo) & (clusters['number'] == number)]
-#             e_level = e_level['efficiency_level'].tolist()[0]
-#             if cluster not in bug_fix:
-#                 bug_fix[cluster] = {}
-#             if e_level not in bug_fix[cluster]:
-#                 bug_fix[cluster][e_level] = []
-#             temp = {'number': number, 'repo_name': repo, 'sequence': generate_event_sequence(i['events'], event_id)}
-#             bug_fix[cluster][e_level].append(temp)
-#         except Exception:
-#             continue
-#
-#     write_json_list([bug_fix], write_path)
+class Sequence:
+    def __init__(self, seq, _next, cls):
+        self.seq = seq
+        self.next = _next
+        self.cls = cls  # pos and neg
+
+
+class Node:
+    def __init__(self, is_leaf=False, val=None, depth=0):
+        self.val = val
+        self.is_leaf = is_leaf
+        self.children = {}
+        self.depth = depth
+        self.sup = {'pos': 0, 'neg': 0}
+
+
+class HashTree:
+    def __init__(self):
+        self.root = Node()
+
+    def insert(self, s):
+        root = self.root
+        cur_node = root
+        for i in range(len(s)):
+            if s[i] not in cur_node.children:
+                cur_node.children[s[i]] = Node(val=s[i], depth=cur_node.depth + 1)
+            cur_node = cur_node.children[s[i]]
+            cur_node.is_leaf = False
+        cur_node.is_leaf = True
+
+    def print_tree(self):
+        node = self.root
+        res = [node]
+        while len(res) > 0:
+            n = res.pop(0)
+            children = list(n.children.keys())
+            if not n.is_leaf:
+                print("element: {}, depth: {}, children: {}, is_leaf: {}".format(n.val, n.depth, children, n.is_leaf))
+            else:
+                print("element: {}, depth: {}, is_leaf: {}, sup: {}".format(n.val, n.depth, n.is_leaf, n.sup))
+            for c in children:
+                res.append(n.children[c])
+
+    def get_sup(self, s):
+        node = self.root
+        flag = True
+        for i in range(len(s)):
+            if s[i] in node.children:
+                node = node.children[s[i]]
+            else:
+                flag = False
+        if flag:
+            # print(node.val, node.is_leaf, node.sup)
+            return node.sup
+        else:
+            raise ValueError('No such node')
+
 
 def generate_event_id(write_path, ignore_events=set()):
     data_dir = get_global_val('data_dir')
@@ -75,10 +106,16 @@ def generate_input_sequence():
                     continue
                 if occur is not None:
                     d_t = calculate_delta_t(occur, e['occur_at'])
-                    temp = temp+set_duration_symbol(d_t)
+                    temp += set_duration_symbol(d_t)
                 occur = e['occur_at']
-                temp = temp + event_id[e['event_type']]
-            input_sequences[eff].append(temp)
+                temp += event_id[e['event_type']]
+            temp += '='
+            i = 0
+            cur = []
+            while i < len(temp):
+                cur.append(temp[i]+temp[i+1])
+                i += 2
+            input_sequences[eff].append(cur)
     write_json_dict(input_sequences, data_dir+'input_sequences.json')
 
 
@@ -94,218 +131,161 @@ def set_duration_symbol(t):
         return '.'
 
 
-def mining_CSP(read_path, min_cr=1):
-    read_data = load_json_list(read_path)[0]
-    for i in read_data:
-        print(
-            "cluster: {}, sequence_num: high={}, low={}".format(i, len(read_data[i]['high']), len(read_data[i]['low'])))
-        data_1 = []
-        data_2 = []
-        for s in read_data[i]['high']:
-            data_1.append(s['sequence'])
-        for s in read_data[i]['low']:
-            data_2.append(s['sequence'])
-        CSPs = generate_CSP(data_1, data_2, min_cr)
-
-        # CSP_str = []
-        # CR = {}
-        # for j in CSPs:
-        #     CSP_str.append(j['CSP'])
-        #     CR[j['CSP']] = j['CR']
-        # if_contain_subsequence(CSP_str, CR)
-
-        with open('data/' + str(i) + 'CSP_results.csv', 'w', newline='') as f:
-            writer = csv.writer(f)
-            writer.writerow(['CSP', 'CR', 'Sup_1', 'Sup_2', 'C1_num', 'C2_num', 'Class'])
-            for j in CSPs:
-                writer.writerow([j['CSP'], j['CR'], j['Sup_1'], j['Sup_2'], j['C1_num'], j['C2_num'], j['class']])
-                # f.write(json.dumps(j) + '\n')
-
-
-def remove_subsequence_csp(data_path, write_path):
-    sequences = set()
-    data = []
-    head = []
-    with open(data_path, 'r') as f:
-        reader = csv.reader(f)
-        for row in reader:
-            if row[0] == 'CSP':
-                head = row
-                continue
-            sequences.add(row[0])
-            data.append(row)
-    remained = delete_subsequence(sequences)
-
-    with open(write_path, 'w', newline='') as f:
-        writer = csv.writer(f)
-        writer.writerow(head)
-        for d in data:
-            if d[0] in remained:
-                writer.writerow(d)
-
-
-def delete_subsequence(sequences):
-    delete_set = set()
-    for target in sequences:
-        flag = False
-        for source in sequences:
-            if target == source:
-                continue
-            cur_pos_t = 0
-            cur_pos_s = 0
-            while cur_pos_s < len(source):
-                if target[cur_pos_t] == source[cur_pos_s]:
-                    cur_pos_t = cur_pos_t + 1
-                cur_pos_s = cur_pos_s + 1
-                if cur_pos_t == len(target):
-                    flag = True
-                    break
-
-            if flag is True:
-                # target is a subsequence of source
-                delete_set.add(target)
-                # if CR[target] == -1 and CR[source] > 0:
-                #     print(target, source)
-    print(len(delete_set), len(sequences))
-    return sequences - delete_set
-
-
 def load_event_id(path):
     with open(path, 'r') as f:
         dic = json.load(f)
         return dic
 
 
-def generate_CSP(data_1, data_2, min_cr):
-    # Initialize
-    events = load_event_id()
-    min_sup = int(0.05 * (len(data_1) + len(data_2)))
-    # min_sup_1 = int(0.05 * len(data_1))
-    # min_sup_2 = int(0.05 * len(data_2))
-    frequent_one_item_set = generate_frequent_one_item(data_1 + data_2, min_sup,
-                                                       events)  # Find all frequent 1-item patterns
-
-    D_num_1 = len(data_1)
-    D_num_2 = len(data_2)
-
-    CSPs = []
-    # Recursion
-    for item in frequent_one_item_set:
-        DFS_CSP(item, item, min_sup, data_1, data_2, D_num_1, D_num_2, frequent_one_item_set, CSPs, min_cr)
-    return CSPs
+def temp_test():
+    data_dir = get_global_val('data_dir')
+    data = load_json_dict(data_dir+'input_sequences.json')
+    count = 0
+    flag = False
+    for s in data['high']:
+        for i in range(len(s)):
+            if s[i] == 'C':
+                for j in range(i+1, len(s)-1):
+                    if s[j] == '.':
+                        flag = True
+        if flag:
+            count += 1
+            flag = False
+    print(count)
 
 
-def generate_frequent_one_item(data, min_sup, events):
+def CDSPM():
+    # Ck = ['123', '125', '153', '234', '253', '345', '534']
+    root_c = HashTree()
+
+    # root_g = None
+
+    data_dir = get_global_val('data_dir')
+    data = load_json_dict(data_dir+'input_sequences.json')
+    # data = {'low': [['A+', 'B-', 'E+', 'C='], ['A+', 'B-', 'C*', 'D='], ['A+', 'D+', 'B-', 'E+', 'C=']],
+    #         'high': [['A*', 'B-', 'C='], ['A*', 'B='], ['A=']]}
+
+    D = []
+    Dp_size = len(data['high'])
+    Dn_size = len(data['low'])
+    print("----------------------  generate next pointers ---------------------")
+    for s in data['low']:
+        _next = build_next(s)
+        seq = Sequence(s, _next, 'neg')
+        D.append(seq)
+    for s in data['high']:
+        _next = build_next(s)
+        seq = Sequence(s, _next, 'pos')
+        D.append(seq)
+
+    k = 1
+    print("positive sequences: {}, negative sequences: {}".format(Dp_size, Dn_size))
+    Ck = GSP_ini(D)
+    # print(Ck)
+    # exit(-1)
+    Gk = []
+    while len(Ck) > 0:
+        print("k={}, generate candidate item sets C_{}: size = {}".format(k, k, len(Ck)))
+        for i in Ck:
+            root_c.insert(i)
+        # root_c.print_tree()
+        for s in D:
+            count_candidates(root_c.root, s, idx=0, depth=k)
+
+        Fk = get_frequent_pattern(root_c, 0.1, Dn_size, Ck, _type='neg')
+        print("number of length = {} fsp: {}".format(k, len(Fk)))
+        Gk += get_csp(root_c, 2, Dp_size, Dn_size, Fk)
+        print("number of length = {} csp: {}".format(k, len(Gk)))
+        # # for conditional discriminative sequential patterns
+        # for p in Gk:
+        #     # TODO
+        #     pass
+
+        Ck = GSP(Fk)
+        k += 1
+        # print(Fk, len(Ck))
+    write_json_data(Gk, data_dir+'csp.json')
+
+
+def build_next(s):
+    _next = [0]*len(s)
+    ptr = {}
+    for i in range(len(s)-1, -1, -1):
+        k = s[i]
+        ptr[k] = i
+        _next[i] = copy.deepcopy(ptr)
+    return _next
+
+
+def count_candidates(node: Node, s: Sequence, idx, depth):
+    if idx >= len(s.seq) or len(node.children) == 0:
+        return
+    for c in node.children:
+        child = node.children[c]
+        key = c
+        if key in s.next[idx]:
+            if child.is_leaf and child.depth == depth:
+                child.sup[s.cls] += 1
+            skip = s.next[idx][key]
+            count_candidates(child, s, skip+1, depth)
+
+
+def GSP_ini(D):
     res = set()
-    for e in events:
-        sup = calculate_sup(e, data)
-        if sup >= min_sup:
-            res.add(e)
-    return res
+    for i in D:
+        seq = i.seq
+        for j in seq:
+            res.add(j)
+
+    res_list = []
+    for r in res:
+        res_list.append([r])
+    return res_list
 
 
-def calculate_sup(event, sequences):
-    count = 0
-    for s in sequences:
-        if event in s:
-            count = count + 1
-    return count
-
-
-def generate_project_database(item, sequences):
+def GSP(Ck):
     res = []
-    for s in sequences:
-        if len(s) > 0:
-            proj = generate_project_sequence(item, s)
-            res.append(proj)
+    # joint
+    for i in range(len(Ck)):
+        for j in range(len(Ck)):
+            if Ck[i][1: len(Ck[i])] == Ck[j][0: len(Ck[j])-1]:
+                # print("p1: {}, p2: {}".format(Ck[i], Ck[j]))
+                new_item = Ck[i]+[Ck[j][len(Ck[j])-1]]
+                # prune
+                if is_subsequence_in(new_item, Ck):
+                    res.append(new_item)
     return res
 
 
-def generate_project_sequence(item, sequence: str):
-    cur_pos_s = sequence.find(item)
-    if cur_pos_s >= 0:
-        return sequence[cur_pos_s: len(sequence)]
-    else:
-        return []
+def is_subsequence_in(s, Ck):
+    for i in range(len(s)):
+        temp_s = copy.deepcopy(s)
+        temp_s.pop(i)
+        if temp_s not in Ck:
+            return False
+    return True
 
 
-def generate_new_prefix(prev, addition):
-    return prev + addition
+def get_frequent_pattern(root: HashTree, min_sup, D_size, CK, _type):
+    res = []
+    for p in CK:
+        sup = root.get_sup(p)
+        if (sup[_type]/D_size) >= min_sup:
+            # print(p, sup['neg']/D_size)
+            res.append(p)
+    return res
 
 
-def calculate_notnull_count(data: list):
-    count = 0
-    for s in data:
-        if len(s) > 0:
-            count = count + 1
-    return count
-
-
-def calculate_CR(sup_1, sup_2, D_1, D_2):
-    if sup_1 == sup_2 == 0:
-        return 0, 0
-    if sup_1 == 0:
-        CR = -1
-        _class = 2
-    elif sup_2 == 0:
-        CR = -1
-        _class = 1
-    else:
-        GR_1 = (sup_1 / D_1) / (sup_2 / D_2)
-        if GR_1 >= 1:
-            CR = GR_1
-            _class = 1
+def get_csp(root: HashTree, min_gr, Dp_size, Dn_size, FK):
+    res = []
+    for p in FK:
+        sup = root.get_sup(p)
+        if sup['pos'] == 0:
+            # print(p, sup)
+            res.append({'seq': p, 'sup': sup, 'gr': -1})
         else:
-            CR = 1 / GR_1
-            _class = 2
-    return CR, _class
-
-
-def calculate_chi_square(sup_x_1, sup_x_2, sup_y_1, sup_y_2):
-    chi = ((sup_x_1 + sup_x_2 + sup_y_1 + sup_y_2) * math.pow((sup_x_1 * sup_y_2 - sup_x_2 * sup_y_1), 2)) / (
-            (sup_x_1 + sup_x_2) * (sup_y_1 + sup_y_2) * (sup_x_1 + sup_y_1) * (sup_x_2 + sup_y_2))
-    return chi
-
-
-def DFS_CSP(current_e, item, min_sup, proj_1, proj_2, D_1, D_2, one_item_set, CSPs, min_cr):
-    # calculate support
-    sup_1 = calculate_sup(current_e, proj_1)
-    sup_2 = calculate_sup(current_e, proj_2)
-    # print(current_e, sup_1, sup_2)
-
-    # generate corresponding projected database
-    d_proj_1 = generate_project_database(current_e, proj_1)
-    d_proj_2 = generate_project_database(current_e, proj_2)
-
-    # calculate the size of corresponding projected database
-    len_c1 = calculate_notnull_count(d_proj_1)
-    len_c2 = calculate_notnull_count(d_proj_2)
-
-    # if len_c1 > 0.5*min_sup and len_c1 > len_c2:
-    #     print(len_c1, len_c2)
-
-    # calculate CR
-    if sup_1 + sup_2 >= 0.01 * (D_1 + D_2):
-        CR, _class = calculate_CR(sup_1, sup_2, D_1, D_2)
-        if CR == -1 or CR >= min_cr:
-            CSPs.append({'CSP': item, 'CR': CR, 'Sup_1': sup_1, 'Sup_2': sup_2, 'C1_num': D_1, 'C2_num': D_2,
-                         'class': _class})
-
-    if len_c1 == 0 or len_c2 == 0 or sup_1 == 0 or sup_2 == 0:  # no child in one class or any support of the two classes equals 0
-        return
-
-    if sup_1 + sup_2 <= min_sup:  # sup(prefix) < min_sup
-        return
-
-    for i in one_item_set:
-        new_item = generate_new_prefix(item, i)
-        # pruning
-        sup_y_1 = calculate_sup(i, d_proj_1)
-        sup_y_2 = calculate_sup(i, d_proj_2)
-        if sup_y_1 + sup_y_2 > 0:
-            chi_square = calculate_chi_square(sup_1, sup_2, sup_y_1, sup_y_2)
-            if chi_square < 1:
-                continue
-        # print(current_e, i, sup_y_1, sup_y_2)
-        # exit(-1)
-        DFS_CSP(i, new_item, min_sup, d_proj_1, d_proj_2, D_1, D_2, one_item_set, CSPs, min_cr)
+            gr = (sup['neg']/sup['pos'])*(Dp_size/Dn_size)
+            if gr >= min_gr:
+                # print(p, sup, gr)
+                res.append({'seq': p, 'sup': sup, 'gr': gr})
+    return res
