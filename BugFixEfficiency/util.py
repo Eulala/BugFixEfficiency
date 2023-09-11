@@ -117,7 +117,7 @@ def load_from_disk(filename):
     return obj
 
 
-def calculate_delta_t(time1, time2):
+def calculate_delta_t(time1, time2, unit='d'):
     format = '%Y-%m-%dT%H:%M:%SZ'
     a = datetime.strptime(time1, format)
     b = datetime.strptime(time2, format)
@@ -127,8 +127,10 @@ def calculate_delta_t(time1, time2):
     b = a / 1000 / 3600  # hour
     c = int(b / 24)  # day
 
-
-    return math.ceil(c)
+    if unit == 'h':  # hour
+        return math.ceil(b)
+    elif unit == 'd':  # day
+        return math.ceil(c)
 
 
 def func_none():

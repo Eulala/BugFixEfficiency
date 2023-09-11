@@ -26,6 +26,108 @@ def draw_plot(df, feature, save_path, y_label, title, _type, use_efficiency=Fals
     plt.savefig(save_path, dpi=150)
 
 
+def draw_line_plot(df, save_path):
+    f, ax = plt.subplots(figsize=(11, 6))
+    # ax.set(ylim=(0, 150))
+    ax.set_ylim(0,1)
+    ax.set_xlim(0, 25)
+    ax.set_xticks(range(0,25))
+    plt.xlabel('length')
+    plt.ylabel('ratio')
+    # plt.xticks([i for i in range(2, 25)])
+    sns.lineplot(data=df, marker='o', dashes=False)
+    # for y in ['without time', 'quartile', 'entropy']:
+    #     sns.lineplot(data=df, x='x', y=y)
+    # plt.legend(title="type", loc=2)
+    # plt.axvline(x=8, color='black', linestyle='-.', label='test')
+    plt.axhline(y=0.2, color='black', linestyle='-.', label='test')
+    plt.savefig(save_path, dpi=150)
+
+
+def draw_histplot(df, save_path, title):
+    f, ax = plt.subplots(figsize=(11, 6))
+    # sns.histplot(data=df, x='length', hue='type', multiple='dodge')
+    # sns.histplot(data=df, x='length', hue='type', multiple='dodge', stat='probability', common_norm=False)
+    # ax.set_xlim(0, 50)
+    # sns.histplot(data=df, x='interval', hue='type', multiple='dodge', binwidth=7, binrange=(0, 100))
+    ax.set_xlim(0, 7)
+    sns.histplot(data=df, x='interval', hue='type', multiple='dodge', binwidth=1, stat='probability', common_norm=False)
+
+    plt.title(title)
+    plt.savefig(save_path, dpi=150)
+
+
+def draw_barplot(df, save_path, title):
+    f, ax = plt.subplots(figsize=(11, 6))
+    sns.barplot(data=df, x='event', y='ratio', hue='type', palette='Set2')
+    # plt.axhline(y=0.1, color='black', linestyle='-.', label='test')
+    plt.title(title)
+    plt.savefig(save_path, dpi=150)
+
+
+def show_event_freq():
+    event_id = load_json_data(r'F:\GiteeProj\BugFixEfficiency\BugFixEfficiency\data\event_id.json')
+    data = pd.read_csv(r'F:\GiteeProj\BugFixEfficiency\BugFixEfficiency\data\sequences\tensorflow_events_rate.csv')
+    row, col = data.shape
+    # print(row, col)
+    _del = []
+    for i in range(0, row):
+        try:
+            data.iat[i, 0] = event_id[data.iat[i, 0]]
+        except Exception:
+            _del.append(i)
+    data = data.drop(index=_del)
+    # data = data.drop(['occur_rare_in_high', 'occur_rare_in_low'], axis=1)
+    # print(sort_d)
+
+    df = data.melt(id_vars=['event'], value_name='frequency', var_name='type')
+    # df = df.pivot(index='event', columns='type', values='frequency')
+    sort_d = df.sort_values(by=['type', 'frequency'], ascending=[True, False])
+    print(sort_d)
+    draw_barplot(sort_d, r'F:\GiteeProj\BugFixEfficiency\BugFixEfficiency\figures\tensorflow_event_freq', 'tensorflow event frequency')
+
+
+def show_event_interval():
+    data = load_json_dict(r'F:\GiteeProj\BugFixEfficiency\BugFixEfficiency\data\event_interval.json')
+    # data = data['tensorflow']
+    event_id = load_json_data(r'F:\GiteeProj\BugFixEfficiency\BugFixEfficiency\data\event_id.json')
+    # select_e = ['Z', 'Y', 'K', 'S', 'T', 'B', 'W', 'I', 'U', 'X', 'O']
+    select_e = ['Z', 'Y', 'K', 'T', 'U', 'B', 'C', 'S', 'W', 'X', 'R', 'I']
+    #
+    # res = []
+    # for e in data:
+    #     try:
+    #         _id = event_id[e]
+    #         if _id not in select_e:
+    #             continue
+    #         temp = {'high': 0, 'low': 0}
+    #         count = {'high': 0, 'low': 0}
+    #         for d in data[e]:
+    #             if d[0] <= 7:
+    #                 temp[d[1]] += 1
+    #             count[d[1]] += 1
+    #         res.append([_id, temp['high']/count['high'], temp['low']/count['low']])
+    #     except Exception:
+    #         pass
+    #
+    # df = pd.DataFrame(res, columns=['event', 'fast', 'slow'])
+    # df = df.melt(id_vars=['event'], value_name='ratio', var_name='type')
+    # sort_d = df.sort_values(by=['type', 'ratio'], ascending=[True, False])
+    # print(sort_d)
+    # draw_barplot(sort_d, r'F:\GiteeProj\BugFixEfficiency\BugFixEfficiency\figures\tensorflow_event_less_7_days', 'the ratio of event intervals less than 7 days')
+
+    rename = {'high': 'fast', 'low': 'slow'}
+    select_e = select_e[0:9]
+    for e in data['tensorflow']:
+        if e in event_id and event_id[e] in select_e:
+            d = data['tensorflow'][e]
+            for i in range(0, len(d)):
+                d[i][1] = rename[d[i][1]]
+            df = pd.DataFrame(d, columns=['interval', 'type'])
+
+            draw_histplot(df, r'F:\GiteeProj\BugFixEfficiency\BugFixEfficiency\figures\tensorflow_interval_'+e, e+' intervals by day in tensorflow')
+
+
 def reset_cluster_name(cluster_path, write_path):
     # sort from smallest to largest
     cluster_features = load_json_list(cluster_path)[0]

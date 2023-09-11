@@ -25,45 +25,22 @@ if __name__ == '__main__':
     # set_efficiency()
     # generate_sequence()
     # translate_sequences(['LockedEvent'])  # for process mining
-    # generate_input_sequence()  # for sequence mining
-    CDSPM()
+
+    # time_discretize()
+    # time_discretize_2_by_entropy()
+    # time_discretize_by_entropy()
+    # time_discretize_entropy_auto()
+    # generate_input_sequence(use_entropy=True)  # for sequence mining
+    # show_event_freq()
+    show_event_interval()
+    # sequence_length_show()
+    # cut_sequence(30)
+    # calcu_inconsistent_ratio()
+    # CDSPM()
+    # translate_result()
     # if_event = find_infrequent_event()
     # translate_sequences(['LockedEvent']+list(if_event))
     # load_event_log()
     # get_event_duration()
     # calculate_statics()
     # generate_graph()
-
-
-
-    # issues_loc = calculate_issue_loc()
-    # cluster_by_complexity(issues_loc)
-    #
-    # generate_bug_fix_features('data/closed_bug_fix.json', 'data/closed_bug_fix_efficiency.json')
-    # bug_fix_efficiency = load_json_data('data/closed_bug_fix_efficiency.json')
-    # integrate_issue_with_efficiency('data/closed_bug_fix.json', bug_fix_efficiency)
-    #
-    # generate_sequence_length('data/closed_bug_fix.json')
-    # generate_clusters_features('data/closed_bug_fix.json', 'data/issue_clusters.json', 'data/closed_bug_issue_features.json')
-
-    # sequential pattern mining
-    # generate_event_id(['data/closed_bug_fix.json'], 'data/event_id.json')
-
-    # generate_input_sequence(['data/clusters_features.csv',
-    #                          'data/closed_bug_fix.json',
-    #                          'data/event_id.json'],
-    #                         'data/closed_bug_fix_sequences.json')
-    # mining_CSP('data/closed_bug_fix_sequences.json', min_cr=2)
-
-    # for i in range(0, 3):
-    #     remove_subsequence_csp(r'data/'+str(i)+'CSP_results.csv', r'data/'+str(i)+'CSP_remained.csv')
-
-    # calculate_fix_time_of_issues('data/closed_bug_issues_with_events.json')
-    # quartile = calculate_statistic_of_fix_time('data/closed_bug_issues_with_fix-time.json')
-    # select_issues_by_fix_time(quartile, 'data/closed_bug_issues_with_fix-time.json', 'data/efficient_issue.json', 'data/inefficient_issue.json')
-    #
-    # integrate_issue_and_prs('data/efficient_issue.json', 'data/tensorflow_prs_with_events.json', 'data/efficient_bug_fix.json')
-    # integrate_issue_and_prs('data/inefficient_issue.json', 'data/tensorflow_prs_with_events.json',
-    #                         'data/inefficient_bug_fix.json')
-
-    # generate_event_id(['data/efficient_bug_fix.json', 'data/inefficient_bug_fix.json'], 'data/event_id.json')

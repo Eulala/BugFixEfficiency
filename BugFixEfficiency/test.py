@@ -1,3 +1,4 @@
+import csv
 import json
 import numpy as np
 from util import *
@@ -6,6 +7,7 @@ import matplotlib.pyplot as plt
 import seaborn as sns
 from preprocess import *
 from contrast_sequential_pattern_mining import *
+from sequence_cluster import *
 
 
 def draw_violin_plot(data_path, save_path):
@@ -21,14 +23,104 @@ def draw_violin_plot(data_path, save_path):
 
 
 if __name__ == '__main__':
-    data = load_json_list('data/c_bug_fix.json')
-    res = []
-    for i in data:
-        for a in i['action_sequence']:
-            if a['event_type'] in ['PullRequestEvent', 'ReferencedEvent']:
-                res.append(i)
-                break
-    print(len(res))
+    initialize()
+    data_dir = r'F:\GiteeProj\BugFixEfficiency\BugFixEfficiency\result\quartile_cut20\\'
+    data = load_json_dict(data_dir+'input_sequences_tensorflow.json')
+    for d in data:
+        print(d)
+    lens = len(data['high']+data['low'])
+    print(len(data['high']), len(data['low']), lens)
+    exit(-1)
+    data = load_json_list(data_dir+'bug_fix_sequences_tensorflow_high.json')
+    size = len(data)
+    events_h = {}
+    for d in data:
+        exist = set()
+        for i in d['action_sequence']:
+            if i['event_type'] not in events_h:
+                events_h[i['event_type']] = 0
+            if i['event_type'] not in exist:
+                events_h[i['event_type']] += 1
+                exist.add(i['event_type'])
+    data = load_json_list(data_dir+'bug_fix_sequences_tensorflow_low.json')
+    events_l = {}
+    for d in data:
+        exist = set()
+        for i in d['action_sequence']:
+            if i['event_type'] not in events_l:
+                events_l[i['event_type']] = 0
+            if i['event_type'] not in exist:
+                events_l[i['event_type']] += 1
+                exist.add(i['event_type'])
+    # events_h = {}
+    # for d in data:
+    #     for i in d['action_sequence']:
+    #         if i['event_type'] not in events_h:
+    #             events_h[i['event_type']] = 0
+    #         events_h[i['event_type']] += 1
+    # print(events_h)
+    # data = load_json_list(data_dir+'bug_fix_sequences_tensorflow_low.json')
+    # events_l = {}
+    # for d in data:
+    #     for i in d['action_sequence']:
+    #         if i['event_type'] not in events_l:
+    #             events_l[i['event_type']] = 0
+    #         events_l[i['event_type']] += 1
+    # print(events_l)
+    data = []
+    keys = set(list(events_h.keys())+list(events_l.keys()))
+    print(keys)
+    for k in keys:
+        temp = [k]
+        if k in events_h:
+            temp.append(events_h[k]/size)
+        else:
+            temp.append(0)
+        if k in events_l:
+            temp.append(events_l[k]/size)
+        else:
+            temp.append(0)
+        data.append(temp)
+    with open(data_dir+'tensorflow_events_rate.csv', 'w', newline='') as f:
+        writer = csv.writer(f)
+        writer.writerow(['event', 'freq_in_high', 'freq_in_low'])
+        for d in data:
+            writer.writerow(d)
+
+
+    exit(-1)
+    data = load_json_data('F:\GiteeProj\BugFixEfficiency\BugFixEfficiency\data\sequences\event_interval\information_gain_4\\ansible_neg_0.2_sup_csp.json')
+    events = {}
+    for d in data:
+        for u in d['seq']:
+            if u[0] not in events:
+                events[u[0]] = 0
+            events[u[0]] += 1
+    data_dir = get_global_val('data_dir')
+    event_id = load_event_id(data_dir + 'event_id.json')
+    event_map = {event_id[key]: key for key in event_id.keys()}
+    res = {}
+    for e in events:
+        res[event_map[e]] = events[e]
+    # print(sorted(res, key=lambda x:x[1], reverse=True))
+    print(res)
+    # time_discretize_2_by_entropy()
+    exit(-1)
+    A = load_json_dict('data/interval_split_entropy.json')
+    B = load_json_dict('data/interval_split_2_entropy.json')
+    for i in A:
+        if A[i] != B[i]:
+            print(i, A[i], B[i])
+    exit(-1)
+
+
+    # ['H.'], ['X+'], ['V+'], ['I.'], ['E+'], ['J+'], ['V*'], ['A*'], ['A.'], ['U*']
+    count = 0
+    for i in data['high']:
+        if 'Q+' in i:
+            count += 1
+            continue
+    print(count)
 
     exit(-1)
     myclient = pymongo.MongoClient("mongodb://ro_user:ro_123456@172.27.135.32:27017/test?authSource=ghdb&readPreference=primary&appname=MongoDB%20Compass&directConnection=true&ssl=false")

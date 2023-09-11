@@ -1,30 +1,32 @@
 from util import *
 from bs4 import BeautifulSoup
 import nltk
+from output import *
 
 # state_map = {'new': 1, 'comprehended': 2, 'assigned': 3, 'proposed': 4, 'passed': 5, 'closed': 6, 'failed': 7, 'discussed': 8}
 bots = { 'tensorflowbutler', 'google-ml-butler', 'tensorflow-bot', 'ansible', 'ansibot'}
 
 
 def extract_raw_data():
-    # mongo_c = MyMongo(mongo_config['ip'], mongo_config['username'], mongo_config['pwd'], port=int(mongo_config['port']))
-    # mongo_c.set_db_name(mongo_config['db_name'])
-    # mongo_c.connect()
-    #
-    # data = mongo_c.get_col_value(col_name='bug_fix', cond={'repo_name': {"$in": ['tensorflow/tensorflow', 'ansible/ansible']}})
-    # write_json_list(data, data_dir + 'bug_fix.json')
-    # mongo_c.close()
     mongo_config = get_global_val('mongo_config')
     data_dir = get_global_val('data_dir')
-    mongo_c = MyMongo(mongo_config['ip'], 'sbh', 'sbh123456', port=int(mongo_config['port']))
-    mongo_c.set_db_name('ghdb')
+    mongo_c = MyMongo(mongo_config['ip'], mongo_config['username'], mongo_config['pwd'], port=int(mongo_config['port']))
+    mongo_c.set_db_name(mongo_config['db_name'])
     mongo_c.connect()
-    # data = mongo_c.get_col_value(col_name='issueTimeline', cond={"index.repo_name": {"$in": ['tensorflow', 'ansible']}})
-    # write_json_list(data, data_dir+'issue_events.json')
 
-    data = mongo_c.get_col_value(col_name='pullRequestTimeline', cond={"index.repo_name": {"$in": ['tensorflow', 'ansible']}})
-    write_json_list(data, data_dir+'pr_events.json')
+    data = mongo_c.get_col_value(col_name='issue_discussion', cond={'repo_name': {"$in": ['pytorch/pytorch']}, 'behavior_type': 'collective'})
+    write_json_list(data, data_dir + 'issue_discussion_test.json')
     mongo_c.close()
+
+    # mongo_c = MyMongo(mongo_config['ip'], 'sbh', 'sbh123456', port=int(mongo_config['port']))
+    # mongo_c.set_db_name('ghdb')
+    # mongo_c.connect()
+    # data = mongo_c.get_col_value(col_name='issueTimeline', cond={"index.repo_name": {"$in": ['pytorch', 'ansible']}})
+    # write_json_list(data, data_dir+'issue_events_test.json')
+
+    # data = mongo_c.get_col_value(col_name='pullRequestTimeline', cond={"index.repo_name": {"$in": ['tensorflow', 'ansible']}})
+    # write_json_list(data, data_dir+'pr_events.json')
+    # mongo_c.close()
 
 
 def find_commit_repo():
@@ -92,7 +94,7 @@ def select_commits(commit_list):
 
 def calculate_fix_time():
     data_dir = get_global_val('data_dir')
-    data = load_json_list(data_dir+'c_bug_fix.json')
+    data = load_json_list(data_dir+'closed_bug_fix.json')
     res = []
     for i in data:
         begin_at = i['occur_at']
@@ -131,26 +133,28 @@ def normalize_fix_time():
     write_json_list(res, data_dir+'bug_fix_time_nor.json')
 
 
-
 def set_efficiency():
     data_dir = get_global_val('data_dir')
     data = load_json_list(data_dir + 'bug_fix_time_nor.json')
-    data = sorted(data, key=lambda x: x['fix_time'])
-    median_k = math.ceil(len(data)/2) - 1
     res = []
-    for i in range(len(data)):
-        if i < median_k:
-            data[i]['efficiency'] = 'high'
-        elif i > median_k:
-            data[i]['efficiency'] = 'low'
-        res.append(data[i])
+    for repo in ['ansible/ansible', 'tensorflow/tensorflow']:
+        f_data = list(filter(lambda d: d['repo'] == repo, data))
+        f_data = sorted(f_data, key=lambda x: x['fix_time'])
+        median_k = math.ceil(len(f_data)/2) - 1
+
+        for i in range(len(f_data)):
+            if i < median_k:
+                f_data[i]['efficiency'] = 'high'
+            elif i > median_k:
+                f_data[i]['efficiency'] = 'low'
+            res.append(f_data[i])
 
     write_json_list(res, data_dir+'bug_fix_with_efficiency.json')
 
 
 def generate_sequence():
     data_dir = get_global_val('data_dir')
-    bug_fix = load_json_list(data_dir+'c_bug_fix.json')
+    bug_fix = load_json_list(data_dir+'closed_bug_fix.json')
     efficiency = load_json_list(data_dir + 'bug_fix_with_efficiency.json')
     b_eff = {}
     for i in efficiency:
@@ -160,32 +164,35 @@ def generate_sequence():
         except Exception:
             pass  # median
 
-    concurrent_events = {}
-    sequences = {'high': [], 'low': []}
-    for b in bug_fix:
-        mention_time = set()
-        temp = { '_id': b['repo_name'][0] + '_' + str(b['target']['number']), 'action_sequence': []}
-        for a in b['action_sequence']:
-            if a['event_type'] == 'MentionedEvent':
-                mention_time.add(a['occur_at'])
-            temp['action_sequence'].append({'event_type': a['event_type'], 'occur_at': a['occur_at']})
-        try:
-            del_index = []
-            index = 0
-            for a in temp['action_sequence']:
-                if a['event_type'] == 'SubscribedEvent' and a['occur_at'] in mention_time:
-                    del_index.append(index)
-                index += 1
-            del_index.reverse()
-            for i in del_index:
-                temp['action_sequence'].pop(i)
-            eff = b_eff[temp['_id']]
-            sequences[eff].append(temp)
-        except Exception:
-            pass  # median
+    for repo in ['ansible/ansible', 'tensorflow/tensorflow']:
+        sequences = {'high': [], 'low': []}
+        for b in bug_fix:
+            mention_time = set()
+            if b['repo_name'] not in repo:
+                continue
+            temp = {'_id': b['repo_name'][0] + '_' + str(b['target']['number']), 'action_sequence': []}
+            for a in b['action_sequence']:
+                if a['event_type'] == 'MentionedEvent':
+                    mention_time.add(a['occur_at'])
+                temp['action_sequence'].append({'event_type': a['event_type'], 'occur_at': a['occur_at']})
+            try:
+                del_index = []
+                index = 0
+                for a in temp['action_sequence']:
+                    if a['event_type'] == 'SubscribedEvent' and a['occur_at'] in mention_time:
+                        del_index.append(index)
+                    index += 1
+                del_index.reverse()
+                for i in del_index:
+                    temp['action_sequence'].pop(i)
+                eff = b_eff[temp['_id']]
+                sequences[eff].append(temp)
+            except Exception:
+                pass  # median
 
-    for eff in sequences:
-        write_json_list(sequences[eff], data_dir+'bug_fix_sequences_' + eff + '.json')
+        repo = repo.split('/')[1]
+        for eff in sequences:
+            write_json_list(sequences[eff], data_dir+'sequences/bug_fix_sequences_' + repo+'_'+eff + '.json')
 
 
 def select_no_data_commits(commit_list):
@@ -240,13 +247,92 @@ def select_no_data_commits(commit_list):
 def select_closed_issue():
     data_dir = get_global_val('data_dir')
     res = []
-    with open(data_dir+'bug_fix.json', 'r') as f:
+    with open(data_dir+'issue_discussion.json', 'r') as f:
         for i in f:
             dic = json.loads(i)
-            if dic['state'] == 'Close':
+            if dic['state'] == 'Close' and dic['behavior_type'] == 'collective' and dic['type'] == 'Bug':
                 res.append(dic)
 
     write_json_list(res, data_dir+'closed_bug_fix.json')
+
+
+def calcu_inconsistent_ratio():
+    data_dir = get_global_val('data_dir')+'sequences/'
+    data = load_json_dict(data_dir+'input_sequences_ansible.json')
+    res_a = get_ratio(data, 25)
+
+    data = load_json_dict(data_dir + 'event_interval/quartile/input_sequences_ansible.json')
+    res_b = get_ratio(data, 25, 2)
+    data = load_json_dict(data_dir + 'entropy_auto/input_sequences_ansible.json')
+    res_c = get_ratio(data, 25, 2)
+    df = pd.DataFrame({'x': range(2, 25), 'without time': res_a, 'quartile': res_b, 'IG': res_c})
+    df = df.melt(id_vars=['x'], value_name='ratio', var_name='type')
+    df = df.pivot(index='x', columns='type', values='ratio')
+
+    figure_dir = get_global_val('figure_dir')
+    draw_line_plot(df, figure_dir+'ansible_inconsistent_ratio')
+
+
+def get_ratio(data, N, split=1):
+    res = []
+    for n in range(2, N):
+        # if n != 10:
+        #     continue
+        slow = []
+        quick = []
+        for d in data['low']:
+            d = ''.join(d)
+            if len(d) < n*split:
+                continue
+            slow.append(d[0:n*split])
+        for d in data['high']:
+            d = ''.join(d)
+            if len(d) < n*split:
+                continue
+            quick.append(d[0:n*split])
+
+        slow = set(slow)
+        quick = set(quick)
+        total_n = len(slow)+len(quick)
+        intersection = slow.intersection(quick)
+        inconsistent = len(intersection)*2
+        # intersection = set(slow).intersection(set(quick))
+        # inconsistent = 0
+        # for s in slow:
+        #     if s in intersection:
+        #         inconsistent += 1
+        # for s in quick:
+        #     if s in intersection:
+        #         inconsistent += 1
+        ratio = inconsistent/total_n
+        # print("top {} : total sequences: {}, inconsistent ratio: {}".format(n, total_n, ratio))
+        res.append(ratio)
+        # if ratio < 0.01:
+        #     break
+    return res
+
+
+def sequence_length_show():
+    data_dir = get_global_val('data_dir') + 'sequences/'
+    data = load_json_dict(data_dir + 'input_sequences_tensorflow.json')
+    lens = []
+
+    rename = {'high': 'fast', 'low': 'slow'}
+
+    for d in data:
+        for i in data[d]:
+            lens.append([rename[d], len(i)])
+    # print(lens)
+    df = pd.DataFrame(lens, columns=['type', 'length'])
+    # print(df)
+
+    figure_dir = get_global_val('figure_dir')
+    draw_histplot(df, figure_dir+'tensorflow_sequence_length', 'tensorflow sequences length')
+
+
+def sequence_interval_show():
+    data_dir = get_global_val('data_dir') + 'sequences/'
+    data = load_json_dict(data_dir + 'input_sequences_ansible.json')
 
 
 def generate_commit_loc():
@@ -300,27 +386,6 @@ def modify_pr_occur():
                 res.append(d)
                 break
     write_json_list(res, data_dir + 'c_bug_fix.json')
-
-
-
-# def extract_raw_data(project_name):
-#     issues = extract_data('issue', {'proj_name': project_name, 'collection': 'issue'})
-#     write_json_data(issues, 'data/issues.json')
-#     prs = extract_data('pr', {'proj_name': project_name, 'collection': 'pullRequest'})
-#     write_json_data(prs, 'data/prs.json')
-#     issue_label = extract_data('label', {'proj_name': project_name, 'collection': 'issueLabel'})
-#     write_json_data(issue_label, 'data/issue_labels.json')
-#     issue_event = extract_data('event', {'proj_name': project_name, 'collection': 'issueTimeline'})
-#     write_json_data(issue_event, 'data/issue_events.json')
-#     pr_event = extract_data('event', {'proj_name': project_name, 'collection': 'pullRequestTimeline'})
-#     write_json_data(pr_event, 'data/pr_events.json')
-#     issue_comment = extract_data('comment', {'proj_name': project_name, 'collection': 'issueComment'})
-#     write_json_data(issue_comment, 'data/issue_comments.json')
-#     pr_comment = extract_data('comment', {'proj_name': project_name, 'collection': 'pullRequestComment'})
-#     write_json_data(pr_comment, 'data/pr_comments.json')
-#     issue_body = extract_data('body', {'proj_name': project_name, 'collection': 'issue'})
-#     write_json_data(issue_body, 'data/issue_bodies.json')
-
 
 
 def translate_issue_body(data_path, write_path):
@@ -398,42 +463,6 @@ def add_comment_to_issues(issue_path, comment_path):
     write_json_list(res, issue_path)
 
 
-def add_commitDiff_to_issues():
-    commit_loc = load_json_dict(data_dir+'commits_loc.json')
-    bug_fix = load_json_list(data_dir+'closed_bug_fix.json')
-
-    res = []
-    for i in bug_fix:
-        i['LOC'] = 0
-        for e in range(0, len(i['action_sequence'])):
-            if i['action_sequence'][e]['event_type'] == 'ReferencedEvent':
-                i['action_sequence'][e]['supple_data']['loc'] = 0
-                try:
-                    sha = i['action_sequence'][e]['supple_data']['oid']
-                    i['action_sequence'][e]['supple_data']['loc'] = commit_loc[sha]['total']
-                except:
-                    pass
-                i['LOC'] += i['action_sequence'][e]['supple_data']['loc']
-            elif i['action_sequence'][e]['event_type'] == 'PullRequestEvent':
-                sub_events = i['action_sequence'][e]['sub_event']
-                for m in range(0, len(sub_events)):
-                    if sub_events[m]['event_type'] == 'PullRequestCommit':
-                        sub_events[m]['supple_data']['loc'] = 0
-                        try:
-                            sha = sub_events[m]['supple_data']['oid']
-                            sub_events[m]['supple_data']['loc'] = commit_loc[sha]['total']
-                        except:
-                            pass
-                        i['LOC'] += sub_events[m]['supple_data']['loc']
-                i['action_sequence'][e]['sub_event'] = sub_events
-
-        res.append(i)
-    write_json_list(res, data_dir+'c_bug_fix_with_loc.json')
-
-
-
-
-
 def delete_merge_commit(commitDiff_path):
     diffs = load_json_list(commitDiff_path)
     res = []
@@ -489,6 +518,11 @@ def limit_commit_filetype(commitDiff_path):
         res.append(c)
 
     write_json_list(res, 'data/commit_diffs_limited.json')
+
+
+
+
+
 
 
 
