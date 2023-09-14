@@ -1,3 +1,5 @@
+import os.path
+
 from preprocess import *
 from process_mining import *
 from bug_fix_efficiency_classify import *
@@ -6,6 +8,50 @@ import matplotlib.pyplot as plt
 from sequence_cluster import *
 from text_clustering import *
 from pre_classification import *
+
+
+def conduct_CDSPM():
+    classify_sequence_by_avgtime(min_len=20)
+    # model_sequence()
+
+    # data_dir = get_global_val('result_dir') + 'event_time/len20/'
+    # if not os.path.exists(data_dir):
+    #     os.mkdir(data_dir)
+    # cut_sequence(20, interval=2)
+    # time_discretize(data_dir, suffix='20_2', pair=False)
+    # time_discretize_entropy_auto(data_dir, suffix='20_2', pair=False)
+    # data_dir = get_global_val('result_dir') + 'event_time/len20/quartile/'
+    # if not os.path.exists(data_dir):
+    #     os.mkdir(data_dir)
+    # generate_input_sequence(data_dir, use_entropy=False, file_suffix='_20_2')  # for sequence mining
+    # data_dir = get_global_val('result_dir') + 'event_time/len20/entropy/'
+    # if not os.path.exists(data_dir):
+    #     os.mkdir(data_dir)
+    # generate_input_sequence(data_dir, use_entropy=True, file_suffix='_20_2')
+    # data_dir = get_global_val('result_dir') + 'event_time/len20/quartile/'
+    # CDSPM(data_dir)
+    # data_dir = get_global_val('result_dir') + 'event_time/len20/entropy/'
+    # CDSPM(data_dir)
+
+    data_dir = get_global_val('result_dir') + 'event_time_event/len20/'
+    if not os.path.exists(data_dir):
+        os.mkdir(data_dir)
+    cut_sequence(20, interval=3)
+    time_discretize(data_dir, suffix='20_3', pair=True)
+    time_discretize_entropy_auto(data_dir, suffix='20_3', pair=True)
+    data_dir = get_global_val('result_dir') + 'event_time_event/len20/quartile/'
+    if not os.path.exists(data_dir):
+        os.mkdir(data_dir)
+    generate_input_sequence_ete(data_dir, use_entropy=False, file_suffix='_20_3')  # for sequence mining
+    data_dir = get_global_val('result_dir') + 'event_time_event/len20/entropy/'
+    if not os.path.exists(data_dir):
+        os.mkdir(data_dir)
+    generate_input_sequence_ete(data_dir, use_entropy=True, file_suffix='_20_3')
+    data_dir = get_global_val('result_dir') + 'event_time_event/len20/quartile/'
+    CDSPM(data_dir)
+    data_dir = get_global_val('result_dir') + 'event_time_event/len20/entropy/'
+    CDSPM(data_dir)
+
 
 if __name__ == '__main__':
     initialize()
@@ -26,18 +72,19 @@ if __name__ == '__main__':
     # generate_sequence()
     # translate_sequences(['LockedEvent'])  # for process mining
 
-    # time_discretize()
-    # time_discretize_2_by_entropy()
-    # time_discretize_by_entropy()
-    # time_discretize_entropy_auto()
-    # generate_input_sequence(use_entropy=True)  # for sequence mining
-    # show_event_freq()
-    show_event_interval()
-    # sequence_length_show()
-    # cut_sequence(30)
-    # calcu_inconsistent_ratio()
-    # CDSPM()
+    issue_preprocess()
+
+
+    # conduct_CDSPM()
     # translate_result()
+
+    calcu_inconsistent_ratio()
+
+    # show_event_freq()
+    # show_event_interval()
+    # sequence_length_show()
+
+
     # if_event = find_infrequent_event()
     # translate_sequences(['LockedEvent']+list(if_event))
     # load_event_log()

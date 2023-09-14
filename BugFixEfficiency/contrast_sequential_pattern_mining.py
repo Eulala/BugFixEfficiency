@@ -1,5 +1,6 @@
 import copy
 import math
+import os
 import time
 
 import numpy
@@ -97,15 +98,16 @@ class GDSPTree(HashTree):
 
 
 def generate_event_id(write_path, ignore_events=set()):
-    data_dir = get_global_val('data_dir')
+    data_dir = get_global_val('data_dir')+'sequences/'
     event_set = set()
-    for eff in ['high', 'low']:
-        data = load_json_list(data_dir + 'bug_fix_sequences_' + eff + '.json')
-        for i in data:
-            events = i['action_sequence']
-            for e in events:
-                if e['event_type'] not in ignore_events:
-                    event_set.add(e['event_type'])
+    for repo in ['tensorflow', 'ansible']:
+        for eff in ['long', 'short']:
+            data = load_json_list(data_dir + 'issue_sequences_' + repo+'_' + eff + '.json')
+            for i in data:
+                events = i['action_sequence']
+                for e in events:
+                    if e['event_type'] not in ignore_events:
+                        event_set.add(e['event_type'])
 
     event_id = dict(zip(event_set, range(len(event_set))))
 
@@ -119,77 +121,142 @@ def generate_event_id(write_path, ignore_events=set()):
     write_json_data(event_id, write_path)
 
 
-def generate_input_sequence(use_entropy=False):
-    use_time = False
+def model_sequence():
     data_dir = get_global_val('data_dir')
     ignore_events = {'LockedEvent'}
 
-    if not os.path.exists(data_dir + 'event_id.json'):
-        generate_event_id(data_dir + 'event_id.json', ignore_events=ignore_events)
+    if not os.path.exists(data_dir + 'sequences/event_id.json'):
+        generate_event_id(data_dir + 'sequences/event_id.json', ignore_events=ignore_events)
 
-    event_id = load_event_id(data_dir + 'event_id.json')
+    event_id = load_event_id(data_dir + 'sequences/event_id.json')
+
+    files = os.listdir(data_dir+'/sequences/')
+    files = list(filter(lambda x: 'issue_sequences_' in x, files))
+    for f in files:
+        res = []
+        data = load_json_list(os.path.join(data_dir+'/sequences/', f))
+        for d in data:
+            temp = {'_id': d['_id'], 'action_sequence': []}
+            last_t = None
+            for a in d['action_sequence']:
+                if a['event_type'] in ignore_events:
+                    break
+                e_id = event_id[a['event_type']]
+                cur_t = a['occur_at']
+                if last_t is not None:
+                    delta_t = calculate_delta_t(last_t, cur_t, unit='m')
+                    temp['action_sequence'].append(delta_t)
+                last_t = cur_t
+                temp['action_sequence'].append(e_id)
+            res.append(temp)
+        file = f.split('.')[0]
+        write_json_list(res, data_dir+'sequences/'+file+'_model.json')
+
+
+def generate_input_sequence(write_dir, use_entropy=False, file_suffix=None):
+    data_dir = get_global_val('data_dir') + 'sequences/'
+    input_sequences = {}
+    sequences = {}
+    interval_dir = os.path.abspath(os.path.join(write_dir, ".."))
+    if use_entropy:
+        interval_split = load_json_dict(os.path.join(interval_dir, 'interval_split_auto_entropy.json'))
+        # interval_split = load_json_dict(data_dir + 'interval_split_4_entropy.json')
+    else:
+        interval_split = load_json_dict(os.path.join(interval_dir,  'interval_split.json'))
+    for repo in ['ansible', 'tensorflow']:
+        for eff in ['short', 'long']:
+            input_sequences[eff] = []
+            sequences[eff] = {}
+            data = load_json_list(data_dir + 'issue_sequences_' + repo + '_' + eff + file_suffix+'.json')
+            for d in data:
+                i = 0
+                temp = ''
+                while i < len(d['action_sequence']):
+                    e = d['action_sequence'][i]
+                    t = d['action_sequence'][i+1]
+                    split = interval_split[repo][e]
+                    temp += e
+                    temp += set_duration_symbol(t, split)
+
+                    i += 2
+                cur = []
+                i = 0
+                while i < len(temp):
+                    cur.append(temp[i] + temp[i + 1])
+                    i += 2
+                input_sequences[eff].append(cur)
+                sequences[eff][d['_id']] = temp
+
+        if not os.path.exists(write_dir):
+            os.mkdir(write_dir)
+        write_json_dict(input_sequences, write_dir + 'input_sequences_' + repo + '.json')
+        write_json_dict(sequences, write_dir + repo + '_sequences_symbol_ver.json')
+
+
+def generate_input_sequence_ete(write_dir, use_entropy=False, file_suffix=None):
+    data_dir = get_global_val('data_dir')+'sequences/'
+    ignore_events = {'LockedEvent'}
+    interval_dir = os.path.abspath(os.path.join(write_dir, ".."))
 
     input_sequences = {}
     sequences = {}
     if use_entropy:
-        interval_split = load_json_dict(data_dir + 'interval_split_entropy.json')
-        # interval_split = load_json_dict(data_dir + 'interval_split_4_entropy.json')
+        interval_split = load_json_dict(os.path.join(interval_dir, 'interval_split_auto_entropy.json'))
     else:
-        interval_split = load_json_dict(data_dir + 'interval_split.json')
+        interval_split = load_json_dict(os.path.join(interval_dir,  'interval_split.json'))
     for repo in ['ansible', 'tensorflow']:
-        for eff in ['low', 'high']:
+        for eff in ['short', 'long']:
             input_sequences[eff] = []
             sequences[eff] = {}
-            data = load_json_list(data_dir + 'sequences/bug_fix_sequences_' + repo + '_' + eff + '.json')
+            data = load_json_list(data_dir + 'issue_sequences_' + repo + '_' + eff + file_suffix+ '.json')
             for d in data:
+                i = 0
                 temp = ''
-                occur = None
-                last_e = None
-                for e in d['action_sequence']:
-                    # if e['event_type'] in ignore_events:
-                    #     continue
-                    if e['event_type'] == 'LockedEvent':
-                        break  # end
-                    if occur is not None:
-                        d_t = calculate_delta_t(occur, e['occur_at'], unit='h')
-                        e_id = last_e
-                        if use_time:
-                            split = interval_split[repo][e_id]
-                            temp += set_duration_symbol(d_t, split)
-                    occur = e['occur_at']
-                    temp += event_id[e['event_type']]
-                    last_e = e['event_type']
-                if use_time:
-                    temp += '='
+                while i < len(d['action_sequence'])-1:
+                    e1 = d['action_sequence'][i]
+                    t = d['action_sequence'][i + 1]
+                    e2 = d['action_sequence'][i+2]
+                    split = interval_split[repo][e1+'_'+e2]
+                    temp += e1
+                    temp += set_duration_symbol(t, split)
+                    i += 2
+                temp += d['action_sequence'][len(d['action_sequence'])-1]
                 i = 0
                 cur = []
-                if use_time:
-                    while i < len(temp):
-                        cur.append(temp[i] + temp[i + 1])
+                while i < len(temp)-1:
+                    try:
+                        cur.append(temp[i] + temp[i + 1] + temp[i+2])
                         i += 2
-                else:
-                    while i < len(temp):
-                        cur.append(temp[i])
-                        i += 1
+                    except Exception:
+                        print(temp, i)
+                        exit(-1)
                 input_sequences[eff].append(cur)
                 sequences[eff][d['_id']] = temp
-        write_json_dict(input_sequences, data_dir + 'sequences/input_sequences_' + repo + '.json')
-        write_json_dict(sequences, data_dir + 'sequences/' + repo + '_sequences_symbol_ver.json')
+        write_json_dict(input_sequences, write_dir + 'input_sequences_' + repo + '.json')
+        write_json_dict(sequences, write_dir + repo + '_sequences_symbol_ver.json')
 
 
-def cut_sequence(length):
+def cut_sequence(length, interval=2):
     data_dir = get_global_val('data_dir')+'sequences/'
-    for repo in ['ansible', 'tensorflow']:
-        data = load_json_dict(data_dir+'event_interval/quartile/input_sequences_'+repo+'.json')
-        res = {}
-        for i in data:
-            res[i] = []
-            for d in data[i]:
-                if len(d) < length:
-                    continue
-                res[i].append(d[0:length])
-                # res[i].append(d)
-        write_json_dict(res, data_dir+'input_sequences_'+repo+'.json')
+
+    cut_len = 0
+    if interval == 2:
+        cut_len = length*2
+    elif interval == 3:
+        cut_len = length*2+1
+    files = os.listdir(data_dir)
+    files = list(filter(lambda x: '_model' in x, files))
+    for file in files:
+        res = []
+        data = load_json_list(os.path.join(data_dir, file))
+        for d in data:
+            if len(d['action_sequence']) < cut_len:
+                continue
+            temp = {'_id': d['_id'], 'action_sequence': d['action_sequence'][0:cut_len]}
+            res.append(temp)
+
+        file = file.replace("model", str(length)+'_'+str(interval))
+        write_json_list(res, os.path.join(data_dir, file))
 
 
 def set_duration_symbol(t, split):
@@ -219,25 +286,24 @@ def temp_test():
     # root.print_tree()
 
 
-def CDSPM():
+def CDSPM(data_dir):
     # temp_test()
     # exit(-1)
     # Ck = ['123', '125', '153', '234', '253', '345', '534']
     start = time.time()
-    data_dir = get_global_val('data_dir') + 'sequences/'
     for repo in ['ansible', 'tensorflow']:
         data = load_json_dict(data_dir + 'input_sequences_' + repo + '.json')
         # data = {'low': [['A+', 'B-', 'E+', 'C='], ['A+', 'B-', 'C*', 'D='], ['A+', 'D+', 'B-', 'E+', 'C=']],
         #         'high': [['A*', 'B-', 'C='], ['A*', 'B='], ['A=']]}
 
         D = []
-        D_size = {'pos': len(data['high']), 'neg': len(data['low'])}
+        D_size = {'pos': len(data['short']), 'neg': len(data['long'])}
         print("----------------------  generate next pointers ---------------------")
-        for s in data['low']:
+        for s in data['long']:
             _next = build_next(s)
             seq = Sequence(s, _next, 'neg')
             D.append(seq)
-        for s in data['high']:
+        for s in data['short']:
             _next = build_next(s)
             seq = Sequence(s, _next, 'pos')
             D.append(seq)
@@ -251,7 +317,7 @@ def CDSPM():
                 opposite_type = 'pos'
             min_gr = 2
             min_con = 1.1
-            for min_sup in range(1, 6):
+            for min_sup in range(1, 2):
                 min_sup = min_sup / 10
                 root_c = GSPTree()
                 root_g = GDSPTree()
@@ -408,9 +474,9 @@ def get_csp(min_gr, D_size, Fp, target_type, opposite_type):
 
 
 def translate_result():
-    data_dir = get_global_val('data_dir')
+    data_dir = get_global_val('result_dir')
     event_id = load_event_id(data_dir + 'event_id.json')
-    data_dir = data_dir + 'sequences/'
+    data_dir = data_dir + 'event_time_event/len20/quartile'
     files = os.listdir(data_dir)
     files = list(filter(lambda x: '_sup_csp' in x, files))
     event_map = {event_id[key]: key for key in event_id.keys()}
@@ -442,21 +508,22 @@ def translate_result():
 
 
 def translate_seq(s, event_map, time_map):
-    s = "".join(s)
-    res = ' | '
-    for i in s:
-        if i in event_map:
-            res += event_map[i]
-        else:
-            res += time_map[i]
-        res += ' | '
+    res = ''
+    for m in s:
+        res += '['
+        for i in m:
+            if i in event_map:
+                res += event_map[i]
+            else:
+                res += time_map[i]
+            res += ' | '
+        res += ']'
     return res
 
 
-def time_discretize():
-    data_dir = get_global_val('data_dir')
-    if not os.path.exists(data_dir + 'event_interval.json'):
-        generate_event_interval()
+def time_discretize(write_dir, suffix, pair):
+    data_dir = write_dir
+    generate_event_interval(write_dir, suffix, pair)
 
     event_interval = load_json_dict(data_dir + 'event_interval.json')
     interval_split = {}
@@ -470,27 +537,6 @@ def time_discretize():
             interval_split[repo][e] = list(qs)
 
     write_json_dict(interval_split, data_dir + 'interval_split.json')
-
-
-def time_discretize_2_by_entropy():
-    data_dir = get_global_val('data_dir')
-
-    if not os.path.exists(data_dir + 'event_interval.json'):
-        generate_event_interval()
-
-    event_interval = load_json_dict(data_dir + 'event_interval.json')
-    interval_split = {}
-    # information gain
-    for repo in ['ansible', 'tensorflow']:
-        interval_split[repo] = {}
-        for e in event_interval[repo]:
-            data = sorted(event_interval[repo][e], key=lambda x: x[0])
-            best_split = find_split_by_entropy(data)
-            if best_split == -1:
-                interval_split[repo][e] = []
-            else:
-                interval_split[repo][e] = [data[best_split][0]]
-    write_json_dict(interval_split, data_dir + 'interval_split_entropy.json')
 
 
 def find_split_by_entropy(data, sum_p=[], sum_n=[]):
@@ -536,92 +582,50 @@ def find_split_by_entropy(data, sum_p=[], sum_n=[]):
     return best_split
 
 
-# def generate_event_interval_with_class():
-#     data_dir = get_global_val('data_dir')
-#     files = list(filter(lambda x: 'bug_fix' in x, os.listdir(data_dir + 'sequences')))
-#     event_interval = {}
-#     for file in files:
-#         data = load_json_list(data_dir + 'sequences/' + file)
-#         if 'high' in file:
-#             _type = 'high'
-#         else:
-#             _type = 'low'
-#         for d in data:
-#             events = d['action_sequence']
-#             for i in range(len(events) - 1):
-#                 delta_t = calculate_delta_t(events[i]['occur_at'], events[i + 1]['occur_at'], unit='h')
-#                 _id = events[i]['event_type'] + '-' + events[i + 1]['event_type']
-#                 if _id not in event_interval:
-#                     event_interval[_id] = []
-#                 event_interval[_id].append([delta_t, _type])
-#     write_json_dict(event_interval, data_dir + 'event_interval_entropy.json')
-
-
-def generate_event_interval():
-    data_dir = get_global_val('data_dir')
+def generate_event_interval(write_dir, suffix='20_2', pair=False):
+    data_dir = get_global_val('data_dir')+'sequences/'
     event_interval = {}
     for repo in ['ansible', 'tensorflow']:
-        files = list(filter(lambda x: 'bug_fix' in x and repo in x, os.listdir(data_dir + 'sequences')))
+        files = list(filter(lambda x: 'issue_sequences' in x and suffix in x and repo in x, os.listdir(data_dir)))
         event_interval[repo] = {}
         for file in files:
-            data = load_json_list(data_dir + 'sequences/' + file)
-            if 'high' in file:
-                _type = 'high'
+            data = load_json_list(os.path.join(data_dir, file))
+            if 'long' in file:
+                _type = 'long'
             else:
-                _type = 'low'
-            for d in data:
-                events = d['action_sequence']
-                for i in range(len(events) - 1):
-                    delta_t = calculate_delta_t(events[i]['occur_at'], events[i + 1]['occur_at'], unit='h')
-                    # _id = events[i]['event_type'] + '-' + events[i + 1]['event_type']
-                    _id = events[i]['event_type']
-                    if _id not in event_interval[repo]:
-                        event_interval[repo][_id] = []
-                    event_interval[repo][_id].append([delta_t, _type])
-    write_json_dict(event_interval, data_dir + 'event_interval.json')
-
-
-def time_discretize_by_entropy():
-    data_dir = get_global_val('data_dir')
-
-    if not os.path.exists(data_dir + 'event_interval.json'):
-        generate_event_interval()
-
-    event_interval = load_json_dict(data_dir + 'event_interval.json')
-    interval_split = {}
-    # information gain
-    for repo in event_interval:
-        interval_split[repo] = {}
-        for e in event_interval[repo]:
-            data = sorted(event_interval[repo][e], key=lambda x: x[0])
-
-            split_i = find_split_by_entropy(data)
-            if split_i == -1:
-                interval_split[repo][e] = []
+                _type = 'short'
+            if not pair:
+                for d in data:
+                    events = d['action_sequence']
+                    i = 0
+                    while i < len(events):
+                        _id = events[i]
+                        if _id not in event_interval[repo]:
+                            event_interval[repo][_id] = []
+                        event_interval[repo][_id].append([events[i+1], _type])
+                        i += 2
             else:
-                data_l = data[0:split_i]
-                data_r = data[split_i:len(data)]
-                split_j = find_split_by_entropy(data_l)
-                if split_j == -1:
-                    split_j = split_i
-                split_k = find_split_by_entropy(data_r)
-                if split_k == -1:
-                    split_k = split_i
-                else:
-                    split_k = split_k+split_i
-
-                pos = sorted(list({split_j, split_i, split_k}))
-                interval_split[repo][e] = []
-                for p in pos:
-                    interval_split[repo][e].append(data[p][0])
-    write_json_dict(interval_split, data_dir + 'interval_split_entropy.json')
+                for d in data:
+                    events = d['action_sequence']
+                    i = 0
+                    while i < len(events)-1:
+                        try:
+                            _id = events[i]+'_'+events[i+2]
+                            if _id not in event_interval[repo]:
+                                event_interval[repo][_id] = []
+                            event_interval[repo][_id].append([events[i + 1], _type])
+                            i += 2
+                        except Exception:
+                            print(i, events)
+                            exit(-1)
+    write_json_dict(event_interval, os.path.join(write_dir, 'event_interval.json'))
 
 
-def time_discretize_entropy_auto():
-    data_dir = get_global_val('data_dir')
+def time_discretize_entropy_auto(write_dir, suffix, pair, gene_interval=False):
+    data_dir = write_dir
 
-    if not os.path.exists(data_dir + 'event_interval.json'):
-        generate_event_interval()
+    if gene_interval:
+        generate_event_interval(write_dir, suffix='20_3', pair=True)
 
     event_interval = load_json_dict(data_dir + 'event_interval.json')
     interval_split = {}
@@ -686,7 +690,7 @@ def calcu_prefix_sum(data):
     pos = [0] * len(data)
     neg = [0] * len(data)
     for i in range(len(data)):
-        if data[i][1] == 'high':
+        if data[i][1] == 'short':
             pos[i] = 1
         else:
             neg[i] = 1

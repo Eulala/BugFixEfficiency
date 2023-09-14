@@ -13,7 +13,7 @@ import configparser
 from myMongo import *
 
 Global_val = { 'mongo_config': {'ip': '', 'port': 0, 'username': '', 'pwd': '', 'db_name': ''},
-               'data_dir': '', 'figure_dir': '',
+               'data_dir': '', 'figure_dir': '', 'result_dir': '',
                'commit_dir': ''}
 
 
@@ -28,6 +28,10 @@ def initialize():
     set_global_val('figure_dir', config['DataPath']['figure_dir'])
     if not os.path.exists(Global_val['figure_dir']):
         os.mkdir(Global_val['figure_dir'])
+
+    set_global_val('result_dir', config['DataPath']['result_dir'])
+    if not os.path.exists(Global_val['result_dir']):
+        os.mkdir(Global_val['result_dir'])
 
     set_global_val('commit_dir', config['DataPath']['commit_dir'])
     if not os.path.exists(Global_val['commit_dir']):
@@ -123,7 +127,7 @@ def calculate_delta_t(time1, time2, unit='d'):
     b = datetime.strptime(time2, format)
     t1 = time.mktime(a.timetuple()) * 1000 + a.microsecond / 1000
     t2 = time.mktime(b.timetuple()) * 1000 + b.microsecond / 1000
-    a = t2 - t1
+    a = abs(t2 - t1)
     b = a / 1000 / 3600  # hour
     c = int(b / 24)  # day
 
@@ -131,6 +135,8 @@ def calculate_delta_t(time1, time2, unit='d'):
         return math.ceil(b)
     elif unit == 'd':  # day
         return math.ceil(c)
+    elif unit == 'm':  # minute
+        return math.ceil(a/1000/60)
 
 
 def func_none():

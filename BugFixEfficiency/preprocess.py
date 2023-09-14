@@ -1,3 +1,5 @@
+import math
+
 from util import *
 from bs4 import BeautifulSoup
 import nltk
@@ -14,7 +16,7 @@ def extract_raw_data():
     mongo_c.set_db_name(mongo_config['db_name'])
     mongo_c.connect()
 
-    data = mongo_c.get_col_value(col_name='issue_discussion', cond={'repo_name': {"$in": ['pytorch/pytorch']}, 'behavior_type': 'collective'})
+    data = mongo_c.get_col_value(col_name='issue_discussion', cond={'repo_name': {"$in": ['tensorflow/tensorflow']}, 'behavior_type': 'collective'})
     write_json_list(data, data_dir + 'issue_discussion_test.json')
     mongo_c.close()
 
@@ -152,6 +154,135 @@ def set_efficiency():
     write_json_list(res, data_dir+'bug_fix_with_efficiency.json')
 
 
+def issue_preprocess():
+    data_dir = get_global_val('data_dir')
+    issues = load_json_list(data_dir + 'closed_issue_discussion.json')
+    res = []
+    for i in issues:
+        if i['action_sequence'][0]['actor'] in bots:
+            continue
+        temp_act = []
+        for a in i['action_sequence']:
+            if a['event_type'] not in ['SubscribedEvent', 'UnsubscribedEvent']:
+                temp_act.append(a)
+        i['action_sequence'] = temp_act
+        # print(i['repo_name'], i['target']['number'])
+        # mention_time = set()
+        # for a in i['action_sequence']:
+        #     if a['event_type'] == 'MentionedEvent':
+        #         mention_time.add(a['occur_at'])
+        # try:
+        #     # print(mention_time)
+        #     del_index = []
+        #     index = 0
+        #     subs_time = set()
+        #     for a in i['action_sequence']:
+        #         subs_time.add(a['occur_at'])
+        #         if a['event_type'] == 'SubscribedEvent' and a['occur_at'] in mention_time:
+        #             del_index.append(index)
+        #         index += 1
+        #     del_index.reverse()
+        #     # print(subs_time)
+        #     # print(del_index)
+        #     for j in del_index:
+        #         i['action_sequence'].pop(j)
+        # except Exception:
+        #     pass  # median
+        res.append(i)
+    write_json_list(res, data_dir + 'preprocessed_closed_issue_discussion.json')
+
+
+def classify_sequence_by_length(min_len=20):
+    data_dir = get_global_val('data_dir')
+    issues = load_json_list(data_dir+'preprocessed_closed_issue_discussion.json')
+    issue_len_level = {}
+    for repo in ['ansible/ansible', 'tensorflow/tensorflow']:
+        issue_len = {}
+        temp = []
+        for i in issues:
+            if i['repo_name'] not in repo:
+                continue
+            _id = i['repo_name'][0]+'_'+str(i['target']['number'])
+            if len(i['action_sequence']) < min_len:
+                continue
+            issue_len[_id] = len(i['action_sequence'])
+            temp.append(len(i['action_sequence']))
+        median = numpy.median(temp)
+        for i in issue_len:
+            if issue_len[i] < median:
+                issue_len_level[i] = 'short'
+            else:
+                issue_len_level[i] = 'long'
+
+        res = {'long': [], 'short': []}
+        for i in issues:
+            if i['repo_name'] not in repo:
+                continue
+
+            _id = i['repo_name'][0]+'_'+str(i['target']['number'])
+            if _id not in issue_len_level:
+                continue
+            temp = {'_id': _id, 'action_sequence': []}
+            for a in i['action_sequence']:
+                temp['action_sequence'].append({'event_type': a['event_type'], 'occur_at': a['occur_at']})
+            level = issue_len_level[_id]
+            res[level].append(temp)
+        repo = repo.split('/')[1]
+        for level in ['long', 'short']:
+            write_json_list(res[level], data_dir + 'sequences/issue_sequences_' + repo + '_' + level + '.json')
+
+
+def classify_sequence_by_avgtime(min_len=20):
+    data_dir = get_global_val('data_dir')
+    issues = load_json_list(data_dir + 'preprocessed_closed_issue_discussion.json')
+    issue_time_level = {}
+    for repo in ['ansible/ansible', 'tensorflow/tensorflow']:
+        issue_avgtime = {}
+        temp = []
+        for i in issues:
+            if i['repo_name'] not in repo:
+                continue
+            _id = i['repo_name'][0] + '_' + str(i['target']['number'])
+            if len(i['action_sequence']) < min_len:
+                continue
+            t1 = i['action_sequence'][0]['occur_at']
+            t2 = 0
+            for e in i['action_sequence']:
+                try:
+                    if e['actor'] not in bots:
+                        t2 = e['occur_at']
+                except Exception:
+                    pass
+
+            delta_t = calculate_delta_t(t1, t2, unit='m')
+            avg_time = delta_t/(len(i['action_sequence']))
+            issue_avgtime[_id] = avg_time
+            temp.append(avg_time)
+        median = numpy.median(temp)
+        for i in issue_avgtime:
+            if issue_avgtime[i] < median:
+                issue_time_level[i] = 'short'
+            else:
+                issue_time_level[i] = 'long'
+
+        res = {'long': [], 'short': []}
+        for i in issues:
+            if i['repo_name'] not in repo:
+                continue
+
+            _id = i['repo_name'][0] + '_' + str(i['target']['number'])
+            if _id not in issue_time_level:
+                continue
+            temp = {'_id': _id, 'action_sequence': []}
+            for a in i['action_sequence']:
+                temp['action_sequence'].append({'event_type': a['event_type'], 'occur_at': a['occur_at']})
+            level = issue_time_level[_id]
+            res[level].append(temp)
+        repo = repo.split('/')[1]
+        for level in ['long', 'short']:
+            write_json_list(res[level], data_dir + 'sequences/issue_sequences_' + repo + '_' + level + '.json')
+
+
 def generate_sequence():
     data_dir = get_global_val('data_dir')
     bug_fix = load_json_list(data_dir+'closed_bug_fix.json')
@@ -257,20 +388,24 @@ def select_closed_issue():
 
 
 def calcu_inconsistent_ratio():
-    data_dir = get_global_val('data_dir')+'sequences/'
-    data = load_json_dict(data_dir+'input_sequences_ansible.json')
-    res_a = get_ratio(data, 25)
+    repo = 'ansible'
+    data_dir = get_global_val('result_dir')+'event_time_event/len20/'
+    data = load_json_dict(data_dir+'entropy/input_sequences_'+repo+'.json')
+    res_a = get_ratio(data, 20, 2)
 
-    data = load_json_dict(data_dir + 'event_interval/quartile/input_sequences_ansible.json')
-    res_b = get_ratio(data, 25, 2)
-    data = load_json_dict(data_dir + 'entropy_auto/input_sequences_ansible.json')
-    res_c = get_ratio(data, 25, 2)
-    df = pd.DataFrame({'x': range(2, 25), 'without time': res_a, 'quartile': res_b, 'IG': res_c})
+    # data = load_json_dict(data_dir + 'event_interval/quartile/input_sequences_ansible.json')
+    data = load_json_dict(data_dir + 'quartile/input_sequences_'+repo+'.json')
+    res_b = get_ratio(data, 20, 2)
+    # data = load_json_dict(data_dir + 'entropy_auto/input_sequences_ansible.json')
+    # res_c = get_ratio(data, 25, 2)
+    # df = pd.DataFrame({'x': range(2, 25), 'without time': res_a, 'quartile': res_b, 'IG': res_c})
+    df = pd.DataFrame({'x': range(2, 20), 'IG': res_a, 'quartile': res_b})
     df = df.melt(id_vars=['x'], value_name='ratio', var_name='type')
     df = df.pivot(index='x', columns='type', values='ratio')
-
+    print(df)
+    # exit(-1)
     figure_dir = get_global_val('figure_dir')
-    draw_line_plot(df, figure_dir+'ansible_inconsistent_ratio')
+    draw_line_plot(df, figure_dir+repo+'_inconsistent_ratio', 'inconsistent ratio in '+repo)
 
 
 def get_ratio(data, N, split=1):
@@ -280,30 +415,33 @@ def get_ratio(data, N, split=1):
         #     continue
         slow = []
         quick = []
-        for d in data['low']:
+        for d in data['long']:
             d = ''.join(d)
             if len(d) < n*split:
                 continue
             slow.append(d[0:n*split])
-        for d in data['high']:
+        for d in data['short']:
             d = ''.join(d)
             if len(d) < n*split:
                 continue
             quick.append(d[0:n*split])
 
-        slow = set(slow)
-        quick = set(quick)
-        total_n = len(slow)+len(quick)
-        intersection = slow.intersection(quick)
-        inconsistent = len(intersection)*2
-        # intersection = set(slow).intersection(set(quick))
-        # inconsistent = 0
-        # for s in slow:
-        #     if s in intersection:
-        #         inconsistent += 1
-        # for s in quick:
-        #     if s in intersection:
-        #         inconsistent += 1
+        total_n = len(slow) * len(quick)
+        _slow = set(slow)
+        _quick = set(quick)
+
+        intersect = _slow.intersection(_quick)
+
+        count_1 = 0
+        count_2 = 0
+        for i in slow:
+            if i in intersect:
+                count_1 += 1
+        for i in quick:
+            if i in intersect:
+                count_2 += 1
+
+        inconsistent = count_1*count_2
         ratio = inconsistent/total_n
         # print("top {} : total sequences: {}, inconsistent ratio: {}".format(n, total_n, ratio))
         res.append(ratio)

@@ -26,7 +26,7 @@ def draw_plot(df, feature, save_path, y_label, title, _type, use_efficiency=Fals
     plt.savefig(save_path, dpi=150)
 
 
-def draw_line_plot(df, save_path):
+def draw_line_plot(df, save_path, title):
     f, ax = plt.subplots(figsize=(11, 6))
     # ax.set(ylim=(0, 150))
     ax.set_ylim(0,1)
@@ -40,7 +40,18 @@ def draw_line_plot(df, save_path):
     #     sns.lineplot(data=df, x='x', y=y)
     # plt.legend(title="type", loc=2)
     # plt.axvline(x=8, color='black', linestyle='-.', label='test')
+    plt.title(title)
     plt.axhline(y=0.2, color='black', linestyle='-.', label='test')
+    plt.savefig(save_path, dpi=150)
+
+
+def draw_boxplot(df, save_path, title):
+    f, ax = plt.subplots(figsize=(11, 6))
+
+    sns.boxplot(x="type", y='length', data=df, palette="Set2", showmeans=True)
+    plt.title(title)
+    ax.set_ylim(0, 200)
+    # plt.axhline(y=0.2, color='black', linestyle='-.', label='test')
     plt.savefig(save_path, dpi=150)
 
 
@@ -50,8 +61,10 @@ def draw_histplot(df, save_path, title):
     # sns.histplot(data=df, x='length', hue='type', multiple='dodge', stat='probability', common_norm=False)
     # ax.set_xlim(0, 50)
     # sns.histplot(data=df, x='interval', hue='type', multiple='dodge', binwidth=7, binrange=(0, 100))
-    ax.set_xlim(0, 7)
-    sns.histplot(data=df, x='interval', hue='type', multiple='dodge', binwidth=1, stat='probability', common_norm=False)
+    # ax.set_xlim(0, 7)
+    # sns.histplot(data=df, x='interval', hue='type', multiple='dodge', binwidth=1, stat='probability', common_norm=False)
+    ax.set_xlim(20, 100)
+    sns.histplot(data=df, x='length', hue='type', multiple='dodge', stat='probability', common_norm=False, palette="Set2")
 
     plt.title(title)
     plt.savefig(save_path, dpi=150)
@@ -224,6 +237,9 @@ def generate_all_pics(read_path):
 
 def set_efficiency_level(read_path):
     # df = pd.read_csv(read_path)
+
+
+
     # for repo in ['tensorflow', 'ansible']:
     #     for cluster in ['0', '1', '2']:
     #         _mean = df.loc[(df['repo_name'].isin([repo])) & (df['cluster'].isin([cluster])), 'efficiency_2'].mean()

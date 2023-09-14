@@ -141,6 +141,7 @@ cython_debug/
 # PYCharm_wyx
 BugFixEfficiency/.idea/
 BugFixEfficiency/data/
+BugFixEfficiency/result/
 BugFixEfficiency/temp_data/
 BugFixEfficiency/data_before20221028/
 BugFixEfficiency/figures/
