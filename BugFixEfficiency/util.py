@@ -137,6 +137,8 @@ def calculate_delta_t(time1, time2, unit='d'):
         return math.ceil(c)
     elif unit == 'm':  # minute
         return math.ceil(a/1000/60)
+    elif unit == 's':
+        return math.ceil(a / 1000)
 
 
 def func_none():

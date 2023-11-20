@@ -48,23 +48,26 @@ def draw_line_plot(df, save_path, title):
 def draw_boxplot(df, save_path, title):
     f, ax = plt.subplots(figsize=(11, 6))
 
-    sns.boxplot(x="type", y='length', data=df, palette="Set2", showmeans=True)
+    sns.boxplot(data=df, palette="Set2", showmeans=True)
     plt.title(title)
-    ax.set_ylim(0, 200)
+    ax.set_ylim(0, 50)
     # plt.axhline(y=0.2, color='black', linestyle='-.', label='test')
     plt.savefig(save_path, dpi=150)
 
 
 def draw_histplot(df, save_path, title):
     f, ax = plt.subplots(figsize=(11, 6))
-    # sns.histplot(data=df, x='length', hue='type', multiple='dodge')
+    # sns.histplot(data=df, x='length', hue='type', multiple='dodge', stat='probability', common_norm=False, palette="Set2")
+    # ax.set_xlim(20, 200)
     # sns.histplot(data=df, x='length', hue='type', multiple='dodge', stat='probability', common_norm=False)
     # ax.set_xlim(0, 50)
     # sns.histplot(data=df, x='interval', hue='type', multiple='dodge', binwidth=7, binrange=(0, 100))
     # ax.set_xlim(0, 7)
     # sns.histplot(data=df, x='interval', hue='type', multiple='dodge', binwidth=1, stat='probability', common_norm=False)
-    ax.set_xlim(20, 100)
-    sns.histplot(data=df, x='length', hue='type', multiple='dodge', stat='probability', common_norm=False, palette="Set2")
+    ax.set_xlim(0, 1000)
+    sns.histplot(data=df, x='duration', multiple='dodge', binwidth=24, stat='probability', common_norm=False, palette="Set2")
+    # sns.histplot(data=df, x='duration', multiple='dodge', stat='probability', common_norm=False, palette="Set2")
+
 
     plt.title(title)
     plt.savefig(save_path, dpi=150)
@@ -72,7 +75,7 @@ def draw_histplot(df, save_path, title):
 
 def draw_barplot(df, save_path, title):
     f, ax = plt.subplots(figsize=(11, 6))
-    sns.barplot(data=df, x='event', y='ratio', hue='type', palette='Set2')
+    sns.barplot(data=df, x='event', y='occurrence', hue='type', palette='Set2')
     # plt.axhline(y=0.1, color='black', linestyle='-.', label='test')
     plt.title(title)
     plt.savefig(save_path, dpi=150)
@@ -342,3 +345,80 @@ if __name__ == '__main__':
 
     # plt.legend(title="efficiency_level", loc=2)
     # plt.savefig(save_path, dpi=150)
+
+
+def write_pattern_table():
+    initialize()
+
+    data_dir = get_global_val('result_dir')+'entropy_len15/'
+    data = load_json_data(data_dir+'neg_0.1_sup_csp.json')
+    data = sorted(data, key=lambda x: x['sup']['neg'], reverse=True)
+
+    seq_freq_n = []
+    gr = []
+    for i in data:
+        seq_freq_n.append(i['sup']['neg'])
+        gr.append(i['gr'])
+    time_map = {'+': 'T_1', '-': 'T_2', '*': 'T_3', '.': 'T_4'}
+    # count = 0
+    # for i in data:
+    #     if count == 10:
+    #         break
+    #     count += 1
+    #     temp = str(count)
+    #     seq = i['seq']
+    #     temp += r' & \begin{tikzcd} '
+    #     flag = False
+    #     for k in seq:
+    #         if flag:
+    #             temp += r' \arrow[r, dotted] & '
+    #         t = time_map[k[1]]
+    #         temp += r'{} \arrow[r, "{}"] & {}'.format(k[0], t, k[2])
+    #         flag = True
+    #
+    #     temp += r' \end{tikzcd}'
+    #     temp += ' & {} & {} & {}  \\\ \hline'.format(i['sup']['pos'], i['sup']['neg'], round(i['gr'], 2))
+    #     print(temp)
+
+    data = load_json_data(data_dir + 'pos_0.1_sup_csp.json')
+    data = sorted(data, key=lambda x: x['sup']['pos'], reverse=True)
+    gr = []
+    seq_freq_p = []
+    for i in data:
+        seq_freq_p.append(i['sup']['pos'])
+        gr.append(i['gr'])
+    # for i in data:
+    #     if count == 20:
+    #         break
+    #     count += 1
+    #     temp = str(count)
+    #     seq = i['seq']
+    #     temp += r' & \begin{tikzcd} '
+    #     flag = False
+    #     for k in seq:
+    #         if flag:
+    #             temp += r' \arrow[r, dotted] & '
+    #         t = time_map[k[1]]
+    #         temp += r'{} \arrow[r, "{}"] & {}'.format(k[0], t, k[2])
+    #         flag = True
+    #
+    #     temp += r' \end{tikzcd}'
+    #     temp += ' & {} & {} & {}  \\\ \hline'.format(i['sup']['pos'], i['sup']['neg'], round(i['gr'], 2))
+    #     print(temp)
+
+    f, ax1 = plt.subplots(figsize=(11, 6))
+    ax1.set_xlabel('pattern_id')
+    ax1.set_ylabel('sup(-)')
+    # plt.xticks([i for i in range(2, 25)])
+    sns.lineplot(data=seq_freq_p,  dashes=False, palette='Set2')
+    # for y in ['without time', 'quartile', 'entropy']:
+    #     sns.lineplot(data=df, x='x', y=y)
+    # plt.legend(title="type", loc=2)
+    # plt.axvline(x=8, color='black', linestyle='-.', label='test')
+    # plt.axhline(y=0.2, color='black', linestyle='-.', label='test')
+    ax2 = ax1.twinx()
+    # ax2.set_ylim(1, 5)
+    sns.lineplot(data=gr, marker='s', dashes=False, color='#038355')
+    ax2.set_ylabel('growth rate')
+    figure_dir = get_global_val('figure_dir')
+    plt.savefig(figure_dir+'pattern_frequency_pos', dpi=150)
