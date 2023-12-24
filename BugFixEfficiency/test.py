@@ -1,5 +1,6 @@
 import csv
 import json
+import math
 import os
 
 import numpy
@@ -8,13 +9,12 @@ from util import *
 import pandas as pd
 import matplotlib.pyplot as plt
 import seaborn as sns
-from pattern.text.en import sentiment
 from preprocess import *
 from contrast_sequential_pattern_mining import *
 from sequence_cluster import *
 from random import sample
 from main import *
-bots = {'tensorflowbutler', 'google-ml-butler', 'tensorflow-bot', 'copybara-service', 'tensorflow-copybara', 'ansible', 'ansibot'}
+bots = {'tensorflowbutler', 'google-ml-butler', 'tensorflow-bot', 'copybara-service', 'tensorflow-copybara', 'ansible', 'ansibot', 'github-project-automation', 'pytorchmergebot'}
 
 
 def draw_violin_plot(data_path, save_path):
@@ -32,11 +32,164 @@ def draw_violin_plot(data_path, save_path):
 if __name__ == '__main__':
 
     initialize()
-    data_dir = get_global_val('result_dir') + 'entropy_test/'
-    CDSPM(data_dir)
+    data_dir = get_global_val('result_dir')
+    for repo in ['tensorflow', 'pytorch', 'go', 'rust', 'transformers', 'vue', 'angular',
+                 'flutter', 'flask', 'rails', 'vscode', 'kubernetes', 'cocos2d-x',
+                 'node', 'godot']:
+        min_len = 10
+        calculate_person_time(repo_name=repo, min_len=min_len)
+    # calculate_avg_res_time(repo_name=repo, min_len=min_len)
+    # t = classify_sequence(repo_name=repo, len_=min_len, use_fix=False)
+    # for max_len in range(30, 31):
+    #     conduct_CDSPM(repo, t, min_len=min_len - 1, max_len=max_len)
+    exit(-1)
 
+    # extract_raw_data()
+    # repo = 'total'
+    # issue_preprocess(repo_name=repo)
+    # delete_closed_by_bot(repo_name=repo)
+    # data_dir = get_global_val('data_dir')+repo
+    # if not os.path.exists(data_dir):
+    #     os.mkdir(data_dir)
+    # filename = os.path.join(data_dir, 'event_id.json')
+    # generate_event_id(repo, filename)
+
+    for repo in ['tensorflow', 'pytorch', 'go', 'rust', 'transformers', 'vue', 'angular',
+                 'flutter', 'flask', 'rails', 'vscode', 'kubernetes', 'cocos2d-x',
+                 'node', 'godot']:
+        min_len = 6
+        # data_dir = get_global_val('result_dir') + 'tensorflow_9_30_test/'
+        # test, pred, temp_seq = validate_seq_vector(data_dir, 1, use_PCA=True)
+        select_issue_longer_than(min_len=min_len, repo_name=repo)
+        calculate_fix_time(repo_name=repo, min_len=min_len)
+        t = classify_sequence(repo_name=repo, len_=min_len)
+
+        for max_len in range(26, 27):
+            conduct_CDSPM(repo, t, min_len=min_len - 1, max_len=max_len)
+
+    # for max_len in range(10, 31):
+    #     data_dir = get_global_val('result_dir') + repo + '_' + str(min_len-1) + '_' + str(max_len)
+    #
+    #     false_seq = []
+    #     total_test = []
+    #     total_pred = []
+    #     for count in range(1, 11):
+    #         test, pred, temp_seq = validate_seq_vector(data_dir, count, use_csp=False)
+    #         false_seq += temp_seq
+    #         total_test += test
+    #         for i in pred:
+    #             total_pred.append(i)
+    #     print(confusion_matrix(total_test, total_pred, labels=['pos', 'neg']))
+    #     print(classification_report(total_test, total_pred))
+    #     print(false_seq)
+    #     write_json_data(classification_report(total_test, total_pred, output_dict=True),
+    #                     os.path.join(data_dir, 'fsp_classification_report.json'))
+
+    # for gr in range(10, 31):
+    #     gr = gr/10
+    #     data_dir = get_global_val('result_dir') + 'tensorflow_9_30_total_gr_'+str(gr)
+    #
+    #     X, Y, D = generate_dataset(repo_name)
+    #     if not os.path.exists(data_dir):
+    #         os.mkdir(data_dir)
+    #     dataset_time_discretize(X, Y, data_dir)
+    #     generate_input_sequence_ete(X, Y, data_dir, 'input_sequences_0.json', use_entropy=True)
+    #     CDSPM(data_dir, 0, min_gr=gr)
+
+        # X, Y, D = generate_dataset(repo_name)
+        # if not os.path.exists(data_dir):
+        #     os.mkdir(data_dir)
+        # write_json_list(D, os.path.join(data_dir, 'all_sequences.json'))
+        #
+        # # d = StratifiedShuffleSplit(n_splits=10, test_size=0.1, random_state=10)
+        # d = StratifiedKFold(n_splits=10, random_state=10, shuffle=True)
+        #
+        # total_test = []
+        # total_pred = []
+        # count = 1
+        # for train_idx, test_idx in d.split(X, Y):
+        #     x_train, x_test = numpy.array(X, dtype=object)[train_idx], numpy.array(X, dtype=object)[test_idx]
+        #     y_train, y_test = numpy.array(Y, dtype=object)[train_idx], numpy.array(Y, dtype=object)[test_idx]
+        #     dataset_time_discretize(x_train, y_train, data_dir)
+        #     write_json_list([train_idx.tolist(), test_idx.tolist()], os.path.join(data_dir, 'split_index.json'))
+        #
+        #     generate_input_sequence_ete(x_train, y_train, data_dir, 'input_sequences_' + str(count) + '.json',
+        #                                 use_entropy=True)
+        #     generate_input_sequence_ete(x_test, y_test, data_dir, 'test_sequences_' + str(count) + '.json',
+        #                                 use_entropy=True)
+        #     # generate_all_sequence_ete(D, data_dir, 'all_sequences_symbol_ver.json', use_entropy=True)
+        #
+        #     CDSPM(data_dir, count, min_gr=gr)
+        #     test, pred, temp_list = validate_seq_vector(data_dir, count)
+        #     total_test += test
+        #     for i in pred:
+        #         total_pred.append(i)
+        #
+        #     count += 1
+        #     # a = validate_seq(data_dir)
+        #     # acc.append(a)
+        #     # exit(-1)
+        # # print(numpy.array(acc).mean())
+        #
+        # print(confusion_matrix(total_test, total_pred, labels=['pos', 'neg']))
+        # print(classification_report(total_test, total_pred))
+        # write_json_data(classification_report(total_test, total_pred, output_dict=True),
+        #                 os.path.join(data_dir, 'classification_report.json'))
 
     exit(-1)
+    # model_idx = 10
+    # data_dir = os.path.join(get_global_val('result_dir'), 'ansible_9_30')
+    # test_ = load_json_dict(os.path.join(data_dir, 'test_sequences_' + str(model_idx) + '.json'))
+    # test_seqs = {'pos': [], 'neg': []}
+    # test_seqs_neg = []
+    # count = 0
+    # for i in test_:
+    #     for q in test_[i]:
+    #         test_seqs[i].append({'seq': q})
+    #         count += 1
+    #         # if count == 267:
+    #         #     print(q)
+    #
+    # for i in test_seqs:
+    #     for j in test_seqs[i]:
+    #         j['cut_seq'] = j['seq'][0:9]
+    #
+    # pos_s = ''
+    # neg_s = ''
+    # for i in test_seqs['pos']:
+    #     for j in test_seqs['neg']:
+    #         if i['cut_seq'] == j['cut_seq']:
+    #             print(i['cut_seq'])
+    #             print(i['seq'])
+    #             print(j['seq'])
+    #             pos_s = i['seq']
+    #             neg_s = j['seq']
+    #
+    #             patterns = []
+    #             data = load_json_data(os.path.join(data_dir, 'pos_0.1_sup_csp_' + str(model_idx) + '.json'))
+    #             for m in data:
+    #                 patterns.append(m['seq'])
+    #             data = load_json_data(os.path.join(data_dir, 'neg_0.1_sup_csp_' + str(model_idx) + '.json'))
+    #             for m in data:
+    #                 patterns.append(m['seq'])
+    #             cand = set()
+    #             for m in patterns:
+    #                 for n in m:
+    #                     cand.add(n)
+    #
+    #             # # seq = ['R*X', 'X+E', 'E-H', 'H+Q', 'Q+E', 'E-H', 'H-F', 'F+E', 'E+E', "E-X", "X+U", "U-H", "H+H", "H-H"]
+    #             clf = pickle.load(open(os.path.join(data_dir, 'model_' + str(model_idx) + '.sav'), 'rb'))
+    #             # pred = clf.predict(seq)
+    #             for s in [pos_s, neg_s]:
+    #                 print('------------------------------------------------------------')
+    #                 print('The full sequence: {}'.format(s))
+    #                 new_s = s[0:9]
+    #                 subsequent_events = s[9:len(s)]
+    #                 do_recommend(new_s, patterns, clf, cand)
+    #                 for k in subsequent_events:
+    #                     new_s = new_s + [k]
+    #                     do_recommend(new_s, patterns, clf, cand)
+
 
 
     # classify_issues()

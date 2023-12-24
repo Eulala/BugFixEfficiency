@@ -1,4 +1,7 @@
+import os
+
 import matplotlib.pyplot as plt
+import pandas as pd
 import seaborn as sns
 from util import *
 from pre_classification import *
@@ -258,95 +261,6 @@ def set_efficiency_level(read_path):
         df.loc[ (df['cluster'].isin([cluster])) & (df['fix_efficiency'] >= _split), 'efficiency_level'] = 'low'
     df.to_csv(read_path, index=0)
 
-
-if __name__ == '__main__':
-    # reset_cluster_name('data/closed_bug_issue_features.json', 'data/closed_bug_issue_features.json')
-    # translate_to_csv('data/closed_bug_issue_features.json', 'data/clusters_features.csv')
-    # set_efficiency_level('data/clusters_features.csv')
-    # generate_all_pics('data/clusters_features.csv')
-
-    # df = pd.read_csv('data/clusters_features.csv')
-    # temp_df = df.loc[(df['cluster'] == 2), ['fix_time', 'fix_efficiency', 'sequence_len']]
-    # print(temp_df.corr(method='spearman'))
-
-    df = pd.read_csv('data/clusters_features.csv')
-    # df = df.loc[:, ['fix_efficiency', 'fix_time', 'sequence_len', 'loc']]
-    # print(df.corr(method='spearman'))
-    feature = 'sequence_len'
-
-    temp_df = df[df['repo_name'].isin(['ansible'])]
-    draw_plot(temp_df, feature, 'figures/ansible_' + feature + '_by_efficiency_box.png', y_label=feature,
-              title='ansible',
-              _type='box', use_efficiency=True)
-    temp_df = df[df['repo_name'].isin(['tensorflow'])]
-    draw_plot(temp_df, feature, 'figures/tensorflow_' + feature + '_by_efficiency_box.png', y_label=feature,
-              title='tensorflow',
-              _type='box', use_efficiency=True)
-    draw_plot(df, feature, 'figures/' + feature + '_by_efficiency_box_mixrepo.png', y_label=feature,
-              title=None,
-              _type='box', use_efficiency=True)
-
-    # f, ax = plt.subplots(figsize=(11, 6))
-    # repo = 'tensorflow'
-    # temp_df = df[df['repo_name'].isin([repo])]
-    # ax.set(ylim=(0, 400000))
-    # sns.violinplot(data=temp_df[feature], palette="Set3", bw=.2, cut=1, linewidth=1, showmeans=True)
-    #
-    # # sns.boxplot(x='repo_name', y=feature, data=df, palette="Set3", showmeans=True)
-    # plt.savefig('figures/temp.png')
-
-    # draw_plot(df, feature, 'figures/' + feature + '_by_efficiency_box.png', y_label=feature, title=None,
-    #           _type='box', use_efficiency=True)
-
-    # _number = 0
-    # df1 = pd.read_csv('data/clusters_features_2.csv')
-    # df2 = pd.read_csv('data/clusters_features_limited_2.csv')
-    # res_list = [[], [], [], [], []]
-    #
-    # for i in range(len(df1)):
-    #     repo_name = df1.loc[i, 'repo_name']
-    #     number = df1.loc[i, 'number']
-    #     loc1 = df1.loc[i, 'loc']
-    #     loc2 = df2.loc[(df2['repo_name'] == repo_name) & (df2['number'] == number), 'loc'].count()
-    #     res_list[0].append(repo_name)
-    #     res_list[1].append(number)
-    #     res_list[2].append(loc1)
-    #     if loc2 > 0:
-    #         loc2 = df2.loc[(df2['repo_name'] == repo_name) & (df2['number'] == number)]
-    #         loc2 = loc2['loc'].tolist()[0]
-    #         res_list[3].append(loc2)
-    #         d_loc = loc1 - loc2
-    #         res_list[4].append(d_loc)
-    #     else:
-    #         res_list[3].append(0)
-    #         res_list[4].append(1)
-    #
-    #     # print(type(loc1), type(loc2))
-    #     # print(repo_name, number, loc1, loc2)
-    #     _number = _number + 1
-    #
-    # df = pd.DataFrame({'repo_name': res_list[0], 'number': res_list[1], 'old_loc': res_list[2], 'new_loc': res_list[3], 'loc_difference_ratio': res_list[4]})
-    # df.to_csv('data/clusters_features_comparison_2.csv', index=False)
-    #
-    # df = pd.read_csv('data/clusters_features_comparison_2.csv')
-    # # print(df.loc[:, 'old_loc'])
-    # f, ax = plt.subplots(figsize=(11, 6))
-    #
-    # ax.set(ylim=(0, 700))
-    # temp = df[['old_loc', 'new_loc']]
-    # temp_df = temp[df['repo_name'].isin(['tensorflow'])]
-    # sns.boxplot(data=temp_df, palette="Set3", showmeans=True)
-    # # sns.violinplot(data=temp, palette="Set3", bw=.2, cut=1, linewidth=1, showmeans=True)
-    # # plt.show()
-    # plt.title('tensorflow')
-    # plt.savefig('figures/loc_tensorflow.png', dpi=150)
-    # sns.despine(left=True, bottom=True)
-    # plt.ylabel(y_label)
-
-    # plt.legend(title="efficiency_level", loc=2)
-    # plt.savefig(save_path, dpi=150)
-
-
 def write_pattern_table():
     initialize()
 
@@ -422,3 +336,324 @@ def write_pattern_table():
     ax2.set_ylabel('growth rate')
     figure_dir = get_global_val('figure_dir')
     plt.savefig(figure_dir+'pattern_frequency_pos', dpi=150)
+
+
+def calculate_inconsistency():
+    data_dir = get_global_val('result_dir') + 'entropy_new/'
+    seqs = load_json_dict(os.path.join(data_dir, 'input_sequences.json'))
+
+    ratio = []
+    for n in range(2, 17):
+        entropy_s = {'pos': [], 'neg': []}
+        event_s = {'pos': [], 'neg': []}
+        for i in seqs:
+            for t in seqs[i]:
+                temp_a = t[0:n-1]
+                # if temp_a not in entropy_s[i]:
+                entropy_s[i].append(temp_a)
+
+                temp_b = []
+                for l in temp_a:
+                    temp_b.append(l[0])
+                temp_b.append(temp_a[len(temp_a)-1][2])
+                # if temp_b not in event_s[i]:
+                event_s[i].append(temp_b)
+
+        count_1 = 0
+        for i in entropy_s['pos']:
+            for j in entropy_s['neg']:
+                if i == j:
+                    count_1 += 1
+        ratio_1 = count_1/(len(entropy_s['pos'])*len(entropy_s['neg']))
+        count_2 = 0
+        for i in event_s['pos']:
+            for j in event_s['neg']:
+                if i == j:
+                    count_2 += 1
+        ratio_2 = count_2 / (len(event_s['pos']) * len(event_s['neg']))
+        print(n, ratio_1, ratio_2)
+
+        ratio.append([n, ratio_1, ratio_2])
+
+    df = pd.DataFrame(ratio, columns=['event number', 'add time interval', 'without time'])
+    print(df)
+    f, ax = plt.subplots(figsize=(11, 6))
+    # ax.set(ylim=(0, 150))
+    # ax.set_ylim(0, 0.4)
+    ax.set_xlim(0, 17)
+    # ax.set_xticks(range(0, 25))
+    plt.xlabel('length')
+    plt.ylabel('ratio')
+    # plt.xticks([i for i in range(2, 25)])
+    # sns.lineplot(data=df, marker='o', dashes=False)
+    sns.lineplot(x='event number', y='add time interval', data=df, label='add time interval', palette='Blues', marker='o', dashes=True)
+    sns.lineplot(x='event number', y='without time', data=df, label='without time', palette='Oranges', marker='s')
+    figure_dir = get_global_val('figure_dir')
+    plt.savefig(os.path.join(figure_dir, 'tensorflow_inconsistency_ratio.png'), dpi=150)
+
+
+def draw_classification_result():
+    data_dir = get_global_val('result_dir')
+    df = pd.read_csv(os.path.join(data_dir, 'classification_accuracy.csv'))
+
+    # print(df[df['min_len'] == 10])
+
+    f, ax = plt.subplots(figsize=(11, 6))
+    # ax.set_xlim(0, 17)
+    plt.xlabel('max length')
+    plt.ylabel('')
+    # plt.ylabel('F-measure')
+    # plt.xticks([i for i in range(2, 25)])
+    # sns.lineplot(data=df, marker='o', dashes=False)
+
+    # feature = 'Accuracy'
+    feature = 'F-measure'
+    plt.title(feature)
+    print(feature)
+    sns.lineplot(x='max_len', y=feature, data=df[df['min_len'] == 10], label='min length=10', color='#4682B4',
+                 marker='o', ci='bootstrapped', linestyle=':')
+    sns.lineplot(x='max_len', y=feature, data=df[df['min_len'] == 11], label='min length=11', color='#FFC1C1',
+                 marker='s', ci='bootstrapped', linestyle=':')
+    sns.lineplot(x='max_len', y=feature, data=df[df['min_len'] == 12], label='min length=12', color='#3CB371',
+                 marker='*', ci='bootstrapped', linestyle=':')
+    sns.lineplot(x='max_len', y=feature, data=df[df['min_len'] == 14], label='min length=14', color='#696969',
+                 marker='^', ci='bootstrapped', linestyle=':')
+    figure_dir = get_global_val('figure_dir')
+    plt.savefig(os.path.join(figure_dir, 'tensorflow_issue_classification_'+feature+'.png'), dpi=150)
+
+
+def draw_false_predicted_histplot():
+    res = []
+    for repo in ['tensorflow', 'ansible', 'godot']:
+        data = load_json_list(os.path.join(get_global_val('result_dir'), repo+'_false_predicted_sequence_length.json'))
+        for i in data:
+            res.append([repo, i])
+
+    df = pd.DataFrame(res, columns=['repo_name', 'length'])
+
+    figure_dir = get_global_val('figure_dir')
+    f, ax = plt.subplots(figsize=(11, 6))
+
+    custom_palette = ['#4682B4', '#FFC1C1', '#66CDAA']
+    sns.set_theme()
+    sns.histplot(data=df, x='length', hue='repo_name', multiple='dodge', stat='probability', binwidth=2,
+                 common_norm=False, palette=custom_palette, kde=True)
+    # sns.histplot(data=df, y='length', stat='probability', hue='repo_name', common_norm=False,
+    #              palette='Set2')
+    plt.title('The distribution of (FP+FT) sequence lengths')
+    # ax.set_ylim(0, 50)
+    # plt.axhline(y=0.2, color='black', linestyle='-.', label='test')
+    plt.savefig(os.path.join(figure_dir, 'false_predicted_sequences.png'), dpi=150)
+
+
+def output_repos_comparison():
+    # all repos comparison
+    initialize()
+    root = get_global_val('result_dir')
+    res = []
+    for repo in ['tensorflow', 'ansible', 'godot']:
+        dir_ = repo + '_9_30'
+        acc1 = load_json_data(os.path.join(root, dir_, 'classification_report.json'))['accuracy']
+        acc2 = load_json_data(os.path.join(root, dir_, 'fsp_classification_report.json'))['accuracy']
+        dir_ = dir_ + '_test'
+        acc3 = load_json_data(os.path.join(root, dir_, 'classification_report.json'))['accuracy']
+        dir_ = repo + '_9_30_ee'
+        acc4 = load_json_data(os.path.join(root, dir_, 'classification_report.json'))['accuracy']
+        res.append([repo, acc1, 'use_csp'])
+        res.append([repo, acc2, 'use_fsp'])
+        res.append([repo, acc3, 'seq:e'])
+        res.append([repo, acc4, 'seq:ee'])
+    df = pd.DataFrame(res, columns=['repo_name', 'accuracy', 'type'])
+
+    f, ax = plt.subplots(figsize=(11, 6))
+    bar = sns.barplot(data=df, x='repo_name', y='accuracy', hue='type', palette='Set3', saturation=0.6)
+    for p in bar.patches:
+        # get the height of each bar
+        height = p.get_height()
+        height = round(height, 3)
+        bar.text(x=p.get_x() + (p.get_width() / 2), y=height+0.01, s=height, ha="center", color='black')
+
+    # for barr, pattern in zip(bar.patches, ['/', '\\', '|', '-']):
+    #     print(bar.patches)
+    #     barr.set_hatch(pattern)
+    hatch_map = {}
+    hatch_set = ['-', '.', '\\', 's']
+    hatch_color_map = {}
+    color_set = ['#5F9EA0', '#CDC673', '#9370DB', '#CD4F39']
+    count = 0
+    for p in bar.patches:
+        color = p.get_facecolor()
+        if color not in hatch_map:
+            hatch_map[color] = hatch_set[count]
+            hatch_color_map[color] = color_set[count]
+            count += 1
+
+        p.set_hatch(hatch_map[color])
+        p.set_edgecolor('black')
+        p.set_facecolor('none')
+        # p.set_edgecolor(hatch_color_map[color])
+    ax.legend(loc='upper right')
+    plt.title('The accuracy of repos under different conditions')
+
+    figure_dir = get_global_val('figure_dir')
+    plt.savefig(os.path.join(figure_dir, 'accuracy_comparison.png'), dpi=150)
+    plt.savefig(os.path.join(figure_dir, 'accuracy_comparison.eps'), dpi=300, format='eps')
+
+
+def output_seq_len_comparison():
+    # accuracy plot for different length
+    initialize()
+    root = get_global_val('result_dir')
+    res = []
+    repo = 'godot'
+    for max_len in range(10, 31):
+        dir_ = repo + '_9_' + str(max_len)
+        acc1 = load_json_data(os.path.join(root, dir_, 'classification_report.json'))['accuracy']
+        acc2 = load_json_data(os.path.join(root, dir_, 'fsp_classification_report.json'))['accuracy']
+        dir_ = dir_ + '_e'
+        acc3 = load_json_data(os.path.join(root, dir_, 'classification_report.json'))['accuracy']
+        res.append([max_len, acc1, acc2, acc3])
+
+    df = pd.DataFrame(res, columns=['max_len', 'use_csp', 'use_fsp', 'no_interval'])
+
+    f, ax1 = plt.subplots(figsize=(11, 6))
+    plt.xlabel('max sequence length')
+    # ax1.set_ylim(0.8, 1)
+    plt.title('Accuracy of '+repo)
+    sns.lineplot(x='max_len', y='use_csp', data=df, ax=ax1, color='#3CB371', label='use csp',
+                 marker='o', ci='bootstrapped', linestyle=':')
+    sns.lineplot(x='max_len', y='use_fsp', data=df, ax=ax1, color='#4682B4', label='use fsp',
+                 marker='s', ci='bootstrapped', linestyle=':')
+    sns.lineplot(x='max_len', y='no_interval', data=df, ax=ax1, color='#FF6A6A', label='no interval',
+                 marker='^', ci='bootstrapped', linestyle=':')
+    ax1.legend(loc='upper left')
+    figure_dir = get_global_val('figure_dir')
+    plt.savefig(os.path.join(figure_dir, repo+'_accuracy_10_to_30.png'), dpi=150)
+
+
+def output_gr_comparison():
+    # accuracy plot for different gr
+    initialize()
+    root = get_global_val('result_dir')
+    acc = {}
+    files = os.listdir(root)
+    dirs = list(filter(lambda x: 'tensorflow_9_30_' in x and 'total' not in x and 'test' not in x and 'ee' not in x, files))
+    for d in dirs:
+        _dir = os.path.join(root, d)
+        report = load_json_data(os.path.join(_dir, 'classification_report.json'))
+        acc[d.split('_')[3]] = report['accuracy']
+
+    pattern_num = {}
+    dirs = list(filter(lambda x: 'tensorflow_9_30_' in x and 'total' in x, files))
+    for d in dirs:
+        _dir = os.path.join(root, d)
+        neg_p = load_json_data(os.path.join(_dir, 'neg_0.1_sup_csp_0.json'))
+        pos_p = load_json_data(os.path.join(_dir, 'pos_0.1_sup_csp_0.json'))
+        pattern_num[d.split('_')[5]] = {'pos': len(pos_p), 'neg': len(neg_p)}
+
+    res = []
+    for i in acc:
+        res.append([i, acc[i], pattern_num[i]['pos'], pattern_num[i]['neg']])
+
+    df = pd.DataFrame(res, columns=['min_gr', 'accuracy', 'pos_csp_num', 'neg_csp_num'])
+
+    print(df)
+
+    f, ax1 = plt.subplots(figsize=(11, 6))
+    plt.xlabel('min growth rate')
+    ax1.set_ylim(0.8, 1)
+    feature = 'accuracy'
+    plt.title('tensorflow')
+    sns.lineplot(x='min_gr', y=feature, data=df, ax=ax1, color='#3CB371', label='accuracy',
+                 marker='o', ci='bootstrapped', linestyle='--')
+    ax2 = ax1.twinx()
+    ax2.set_ylabel('the number of csps')
+    sns.lineplot(x='min_gr', y='pos_csp_num', data=df, ax=ax2, label='pos_csp_num', color='#FF6A6A',
+                 marker='s', ci='bootstrapped', linestyle=':')
+    sns.lineplot(x='min_gr', y='neg_csp_num', data=df, ax=ax2, label='neg_csp_num', color='#4682B4',
+                 marker='^', ci='bootstrapped', linestyle=':')
+    # sns.lineplot(x='max_len', y=feature, data=df[df['min_len'] == 14], label='min length=14', color='#696969',
+    #              marker='^', ci='bootstrapped', linestyle=':')
+    ax1.legend(loc='upper left', bbox_to_anchor=(0.1, 1.0))
+    ax2.legend(loc='upper right', bbox_to_anchor=(0.9, 1.0))
+    figure_dir = get_global_val('figure_dir')
+    plt.savefig(os.path.join(figure_dir, 'tensorflow_9_30_cls_accuracy.png'), dpi=150)
+
+
+def output_repos_different_lenrange():
+    # all repos comparison: different min_len
+    initialize()
+    root = get_global_val('result_dir')
+    res = []
+    for repo in ['tensorflow', 'ansible', 'godot']:
+        for min_len in range(5, 10):
+            dir_ = "{}_{}_{}".format(repo, min_len, min_len+21)
+            acc = load_json_data(os.path.join(root, dir_, 'classification_report.json'))['accuracy']
+            res.append([repo, acc, "{}~{}".format(min_len+1, min_len+21)])
+    df = pd.DataFrame(res, columns=['repo_name', 'accuracy', 'seq_len'])
+
+    f, ax = plt.subplots(figsize=(11, 6))
+    bar = sns.barplot(data=df, x='repo_name', y='accuracy', hue='seq_len', palette='Set3', saturation=0.6)
+    for p in bar.patches:
+        # get the height of each bar
+        height = p.get_height()
+        height = round(height, 3)
+        bar.text(x=p.get_x() + (p.get_width() / 2), y=height+0.01, s=height, ha="center", color='black')
+
+    # for barr, pattern in zip(bar.patches, ['/', '\\', '|', '-']):
+    #     print(bar.patches)
+    #     barr.set_hatch(pattern)
+    hatch_map = {}
+    hatch_set = ['-', '.', '\\', 'x', 's']
+    hatch_color_map = {}
+    color_set = ['#5F9EA0', '#CDC673', '#9370DB', '#CD4F39', '#CD4F39']
+    count = 0
+    for p in bar.patches:
+        color = p.get_facecolor()
+        if color not in hatch_map:
+            hatch_map[color] = hatch_set[count]
+            hatch_color_map[color] = color_set[count]
+            count += 1
+
+        p.set_hatch(hatch_map[color])
+        p.set_edgecolor('black')
+        p.set_facecolor('none')
+        # p.set_edgecolor(hatch_color_map[color])
+    ax.legend(loc='upper right', bbox_to_anchor=(1.1, 1.0))
+    plt.title('The accuracy with different seq length')
+
+    figure_dir = get_global_val('figure_dir')
+    plt.savefig(os.path.join(figure_dir, 'different_len_accuracy.png'), dpi=150)
+
+
+if __name__ == '__main__':
+    initialize()
+    root = get_global_val('result_dir')
+
+    res = []
+    for repo in ['tensorflow', 'ansible', 'godot']:
+        for min_len in range(5, 10):
+            dir_ = "{}_{}_{}".format(repo, min_len, 'total')
+            pos_count = len(load_json_data(os.path.join(root, dir_, 'pos_0.1_sup_csp_0.json')))
+            neg_count = len(load_json_data(os.path.join(root, dir_, 'neg_0.1_sup_csp_0.json')))
+            res.append([repo, pos_count, neg_count, pos_count+neg_count, min_len+1])
+
+    df = pd.DataFrame(res, columns=['repo_name', 'pos_csp_num', 'neg_csp_num', 'total_csp_num', 'min_len'])
+
+    f, ax1 = plt.subplots(figsize=(11, 6))
+    # plt.xlabel('max sequence length')
+    ax1.set_ylim(0, 200)
+    # plt.title('Accuracy of ' + repo)
+
+    sns.lineplot(x='min_len', y='total_csp_num', data=df[df['repo_name'] == 'tensorflow'], label='tensorflow',
+                 color='#3CB371', marker='o', linestyle='--')
+    sns.lineplot(x='min_len', y='total_csp_num', data=df[df['repo_name'] == 'ansible'], color='#4682B4',
+                 label='ansible', marker='s', linestyle='--')
+    sns.lineplot(x='min_len', y='total_csp_num', data=df[df['repo_name'] == 'godot'], color='#FF6A6A',
+                 label='godot', marker='^', linestyle='--')
+    ax1.legend(loc='upper left')
+    figure_dir = get_global_val('figure_dir')
+    plt.savefig(os.path.join(figure_dir, 'total_pattern_number.png'), dpi=150)
+
+
+

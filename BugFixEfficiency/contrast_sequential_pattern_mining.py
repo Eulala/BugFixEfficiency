@@ -6,6 +6,7 @@ import random
 import time
 
 import numpy
+from termcolor import colored
 
 from util import *
 from sklearn.metrics import confusion_matrix
@@ -106,18 +107,23 @@ class GDSPTree(HashTree):
         cur_node.is_tail = True
 
 
-def generate_event_id(write_path, ignore_events=set()):
-    data_dir = get_global_val('data_dir')+'sequences/'
+def generate_event_id(repo_name, write_path, ignore_events=set()):
+    data_dir = get_global_val('data_dir')
+    if repo_name == 'total':
+        files = list(filter(lambda x: '_closed_issues' + '.json' in x, os.listdir(data_dir)))
+        data = []
+        for f in files:
+            data += load_json_list(os.path.join(data_dir, f))
+    else:
+        data = load_json_list(os.path.join(data_dir, repo_name + '_closed_issues.json'))
     event_set = set()
-    for repo in ['tensorflow']:
-        for eff in ['pos', 'neg']:
-            data = load_json_list(data_dir + 'issue_sequences_' + repo+'_' + eff + '.json')
-            for i in data:
-                events = i['action_sequence']
-                # events = i
-                for e in events:
-                    if e['event_type'] not in ignore_events:
-                        event_set.add(e['event_type'])
+
+    for i in data:
+        events = i['action_sequence']
+        # events = i
+        for e in events:
+            if e['event_type'] not in ignore_events:
+                event_set.add(e['event_type'])
 
     event_id = dict(zip(event_set, range(len(event_set))))
 
@@ -131,16 +137,12 @@ def generate_event_id(write_path, ignore_events=set()):
     write_json_data(event_id, write_path)
 
 
-def model_sequence():
-    data_dir = get_global_val('data_dir')+'sequences/'
+def model_sequence(repo_name):
+    data_dir = os.path.join(get_global_val('data_dir'), repo_name)
+    event_id = load_event_id(os.path.join(data_dir, 'event_id.json'))
 
-    if not os.path.exists(data_dir + 'event_id.json'):
-        generate_event_id(data_dir + 'event_id.json')
-
-    event_id = load_event_id(data_dir + 'event_id.json')
-
-    files = os.listdir(data_dir)
-    files = list(filter(lambda x: 'issue_sequences_' in x, files))
+    # files = os.listdir(data_dir)
+    files = ['issue_sequences_neg.json', 'issue_sequences_pos.json', 'issue_sequences_med.json']
     for f in files:
         res = []
         data = load_json_list(os.path.join(data_dir, f))
@@ -159,7 +161,7 @@ def model_sequence():
                 temp['action_sequence'].append(e_id)
             res.append(temp)
         file = f.split('.')[0]
-        write_json_list(res, data_dir+file+'_model.json')
+        write_json_list(res, os.path.join(data_dir, file+'_model.json'))
 
 
 def generate_input_sequence(write_dir, use_entropy=False, file_suffix=None):
@@ -205,6 +207,7 @@ def generate_input_sequence(write_dir, use_entropy=False, file_suffix=None):
 def generate_input_sequence_ete(x_train, y_train, write_dir, filename, use_entropy=False):
     # interval_dir = os.path.abspath(os.path.join(write_dir, ".."))
     input_sequences = {'pos': [], 'neg': []}
+    # input_sequences = {'pos': [], 'neg': [], 'med': []}
     sequences = {}
     if use_entropy:
         interval_split = load_json_dict(os.path.join(write_dir, 'interval_split_auto_entropy.json'))
@@ -240,8 +243,86 @@ def generate_input_sequence_ete(x_train, y_train, write_dir, filename, use_entro
             except Exception:
                 print(temp, i)
                 exit(-1)
+        # if cur[len(cur)-1][2] == 'B':
+        #     # delete the last closed event
+        #     cur = cur[0:len(cur)-1]
         input_sequences[eff].append(cur)
     write_json_dict(input_sequences, os.path.join(write_dir, filename))
+
+
+def generate_med_sequence_ete(read_file, write_dir, filename, use_entropy=False):
+    # interval_dir = os.path.abspath(os.path.join(write_dir, ".."))
+    input_sequences = []
+    if use_entropy:
+        interval_split = load_json_dict(os.path.join(write_dir, 'interval_split_auto_entropy.json'))
+    else:
+        interval_split = load_json_dict(os.path.join(write_dir,  'interval_split.json'))
+
+    data = load_json_list(read_file)
+    for d in data:
+        i = 0
+        temp = ''
+        seq = d['action_sequence']
+        while i < len(seq)-1:
+            e1 = seq[i]
+            t = seq[i + 1]
+            e2 = seq[i+2]
+            try:
+                split = interval_split[e1+'_'+e2]
+            except Exception:
+                split = []
+            temp += e1
+            temp += set_duration_symbol(t, split)
+            # temp += '+'
+            # if e1 == 'E' and e2 == 'H':
+            #     print(t, split, set_duration_symbol(t, split))
+            i += 2
+        temp += seq[len(seq)-1]
+        i = 0
+        cur = []
+        while i < len(temp)-1:
+            try:
+                cur.append(temp[i] + temp[i + 1] + temp[i+2])
+                i += 2
+            except Exception:
+                print(temp, i)
+                exit(-1)
+        # if cur[len(cur)-1][2] == 'B':
+        #     # delete the last closed event
+        #     cur = cur[0:len(cur)-1]
+        input_sequences.append(cur)
+    write_json_dict(input_sequences, os.path.join(write_dir, filename))
+
+
+def generate_input_sequence_e(x_train, y_train, write_dir, filename):
+    input_sequences = {'pos': [], 'neg': []}
+    sequences = {}
+
+    for d in range(len(x_train)):
+        i = 0
+        seq = x_train[d]
+        eff = y_train[d]
+        cur = []
+        while i < len(seq):
+            cur.append(seq[i])
+            i += 2
+        input_sequences[eff].append(cur)
+    write_json_dict(input_sequences, os.path.join(write_dir, filename))
+
+def generate_input_sequence_ee(x_train, y_train, write_dir, filename):
+    input_sequences = {'pos': [], 'neg': []}
+
+    for d in range(len(x_train)):
+        i = 0
+        seq = x_train[d]
+        eff = y_train[d]
+        cur = []
+        while i < len(seq)-1:
+            cur.append(seq[i]+seq[i+2])
+            i += 2
+        input_sequences[eff].append(cur)
+    write_json_dict(input_sequences, os.path.join(write_dir, filename))
+
 
 def generate_all_sequence_ete(data, write_dir, filename, use_entropy=False):
     # interval_dir = os.path.abspath(os.path.join(write_dir, ".."))
@@ -284,58 +365,75 @@ def generate_all_sequence_ete(data, write_dir, filename, use_entropy=False):
     write_json_list(res, os.path.join(write_dir, filename))
 
 
-def cut_sequence(length, interval=2):
-    data_dir = get_global_val('data_dir')+'sequences/'
+def cut_sequence(min_len, max_len, max_t, repo_name, interval=2):
+    data_dir = get_global_val('data_dir')+repo_name
 
+    max_time = max_t
     cut_len = 0
     if interval == 2:
-        cut_len = length*2
+        cut_len = max_len*2
     elif interval == 3:
-        cut_len = length*2+1
+        cut_len = max_len*2+1
     files = os.listdir(data_dir)
     files = list(filter(lambda x: '_model' in x, files))
     for file in files:
         res = []
         data = load_json_list(os.path.join(data_dir, file))
         for d in data:
-            if len(d['action_sequence']) < cut_len:
+            if len(d['action_sequence']) < min_len*2+1:
                 # print(d)
                 continue
-            temp = {'_id': d['_id'], 'action_sequence': d['action_sequence'][0:cut_len]}
+            seq = d['action_sequence'][0:cut_len]
+
+            k = 1
+            sum_t = 0
+            idx = k
+            while k < len(seq) - 1:
+                if sum_t >= max_time:
+                    idx = k
+                    break
+                sum_t += d['action_sequence'][k]
+                k += 2
+            if idx == 0:  # less than max days
+                temp = {'_id': d['_id'], 'action_sequence': seq}
+            else:
+                temp = {'_id': d['_id'], 'action_sequence': seq[0:k]}
+            if len(temp['action_sequence']) < min_len*2+1:
+                continue
+            # temp = {'_id': d['_id'], 'action_sequence': seq}
             res.append(temp)
 
         file = file.replace("model", 'cut_origin')
         write_json_list(res, os.path.join(data_dir, file))
 
 
-def cut_sequence_by_time(_time, interval=2):
-    data_dir = get_global_val('data_dir')+'sequences/'
-
-    cut_time = _time*24*60  # minutes
+def cut_sequence_by_time(day, repo_name, interval=2):
+    data_dir = get_global_val('data_dir') + repo_name
     files = os.listdir(data_dir)
     files = list(filter(lambda x: '_model' in x, files))
     for file in files:
         res = []
         data = load_json_list(os.path.join(data_dir, file))
         for d in data:
-            cur_time = 0
-            cut_index = 0
-            for i in range(len(d['action_sequence'])):
-                if i % 2 == 1:
-                    cur_time += d['action_sequence'][i]
-                else:
-                    continue
-                if cur_time > cut_time:
-                    cut_index = i
+            k = 1
+            sum_t = 0
+            idx = k
+            while k < len(d['action_sequence'])-1:
+                if sum_t >= day*60*24:
+                    idx = k
                     break
-            if cut_index == 1:
-                cut_index += 2
-            # print(cut_index, d['action_sequence'][0:cut_index])
-            temp = {'_id': d['_id'], 'action_sequence': d['action_sequence'][0:cut_index]}
-            res.append(temp)
-        file = file.replace("model", str(_time)+'_'+str(interval))
-        write_json_list(res, os.path.join(data_dir, file))
+                sum_t += d['action_sequence'][k]
+                k += 2
+            if idx == 0:  # not long enough
+                continue
 
+            temp = {'_id': d['_id'], 'action_sequence': d['action_sequence'][0:k]}
+            if len(temp['action_sequence']) < 10:
+                continue
+            res.append(temp)
+
+        file = file.replace("model", 'cut_origin')
+        write_json_list(res, os.path.join(data_dir, file))
 
 def set_duration_symbol(t, split):
     symbol = ['+', '-', '*', '.']
@@ -366,13 +464,13 @@ def temp_test():
     # root.print_tree()
 
 
-def CDSPM(data_dir):
+def CDSPM(data_dir, count, min_gr=1.5):
     # temp_test()
     # exit(-1)
     # Ck = ['123', '125', '153', '234', '253', '345', '534']
     start = time.time()
 
-    data = load_json_dict(data_dir + 'input_sequences.json')
+    data = load_json_dict(os.path.join(data_dir, 'input_sequences_'+str(count)+'.json'))
     # data = {'low': [['A+', 'B-', 'E+', 'C='], ['A+', 'B-', 'C*', 'D='], ['A+', 'D+', 'B-', 'E+', 'C=']],
     #         'high': [['A*', 'B-', 'C='], ['A*', 'B='], ['A=']]}
 
@@ -395,10 +493,10 @@ def CDSPM(data_dir):
             opposite_type = 'neg'
         else:
             opposite_type = 'pos'
-        min_gr = 1.5
         min_con = 1.0
         for min_sup in range(1, 2):
             min_sup = min_sup / 10
+            # min_sup = 0.05
             root_c = GSPTree()
             root_g = GDSPTree()
 
@@ -443,8 +541,8 @@ def CDSPM(data_dir):
                 Ck = GSP(Fk)
                 k += 1
 
-            write_json_data(csp, data_dir + pattern_type + '_' + str(min_sup) + '_sup_csp.json')
-            write_json_data(fsp, data_dir + pattern_type + '_' + str(min_sup) + '_sup_fsp.json')
+            write_json_data(csp, os.path.join(data_dir, pattern_type + '_' + str(min_sup) + '_sup_csp_'+str(count)+'.json'))
+            write_json_data(fsp, os.path.join(data_dir, pattern_type + '_' + str(min_sup) + '_sup_fsp_'+str(count)+'.json'))
 
             end = time.time()
             print("min_sup = {}, Runtime: {}".format(min_sup, end - start))
@@ -482,6 +580,8 @@ def calculate_ConRe(node: Node, p: Pattern, idx, target_type, opposite_type):
         key = child.val
         if key in p.next[idx]:
             if child.is_tail:
+                if child.sup[opposite_type] == 0:
+                    p.con = -1
                 if child.sup[target_type] * p.sup[opposite_type] == 0:
                     p.con = min(p.con, float('inf'))
                 else:
@@ -556,95 +656,111 @@ def get_csp(min_gr, D_size, Fp, target_type, opposite_type):
     return res
 
 
-def translate_result():
-    data_dir = get_global_val('result_dir')
-    event_dir = get_global_val('data_dir') + 'sequences/'
-    event_id = load_event_id(event_dir + 'event_id.json')
+def translate_result(dir_name):
+    data_dir = os.path.join(get_global_val('result_dir'), "{}_9_total".format(dir_name))
+    event_dir = os.path.join(get_global_val('data_dir'), dir_name)
+    event_id = load_event_id(os.path.join(event_dir, 'event_id.json'))
 
     for p_type in ['csp', 'fsp']:
-        for _type in ['entropy']:
-            temp_dir = data_dir + _type
-            files = os.listdir(temp_dir)
-            files = list(filter(lambda x: '_sup' in x and p_type in x, files))
-            event_map = {event_id[key]: key for key in event_id.keys()}
-            # +: < 7d, -: 7~14d, *:14~28d, .:>=28d
-            time_map = {'+': 'T1', '-': 'T2', '*': 'T3', '.': 'T4', '=': 'The end'}
+        files = os.listdir(data_dir)
+        files = list(filter(lambda x: '_sup' in x and p_type in x, files))
+        event_map = {event_id[key]: key for key in event_id.keys()}
+        # +: < 7d, -: 7~14d, *:14~28d, .:>=28d
+        time_map = {'+': 'T1', '-': 'T2', '*': 'T3', '.': 'T4', '=': 'The end'}
 
-            for file in files:
-                data = load_json_data(os.path.join(temp_dir, file))
-                if len(data) == 0:
-                    continue
-                res = []
-                for d in data:
-                    temp = []
-                    seq = translate_seq(d['seq'], event_map, time_map)
-                    temp.append(seq)
-                    temp.append(d['sup']['pos'])
-                    temp.append(d['sup']['neg'])
-                    if p_type == 'csp':
-                        temp.append(d['gr'])
-                        temp.append(d['con'])
-                    res.append(temp)
+        for file in files:
+            data = load_json_data(os.path.join(data_dir, file))
+            if len(data) == 0:
+                continue
+            res = []
+            for d in data:
+                temp = []
+                seq = translate_seq(d['seq'], event_map, time_map)
+                temp.append(seq)
+                temp.append(d['sup']['pos'])
+                temp.append(d['sup']['neg'])
+                if p_type == 'csp':
+                    temp.append(d['gr'])
+                    temp.append(d['con'])
+                res.append(temp)
 
-                file = file.replace("json", "csv")
-                if 'pos' in file:
-                    res = sorted(res, key=lambda x: x[1], reverse=True)
-                else:
-                    res = sorted(res, key=lambda x: x[2], reverse=True)
-                with open(os.path.join(temp_dir, file), 'w', newline='') as f:
-                    writer = csv.writer(f)
-                    if p_type == 'csp':
-                        writer.writerow(['seq', 'sup_pos', 'sup_neg', 'growth_rate', 'condition_redundancy'])
-                    elif p_type == 'fsp':
-                        writer.writerow(['seq', 'sup_pos', 'sup_neg'])
-                    for d in res:
-                        writer.writerow(d)
+            file = file.replace("json", "csv")
+            if 'pos' in file:
+                res = sorted(res, key=lambda x: x[1], reverse=True)
+            else:
+                res = sorted(res, key=lambda x: x[2], reverse=True)
+            with open(os.path.join(data_dir, file), 'w', newline='') as f:
+                writer = csv.writer(f)
+                if p_type == 'csp':
+                    writer.writerow(['seq', 'sup_pos', 'sup_neg', 'growth_rate', 'condition_redundancy'])
+                elif p_type == 'fsp':
+                    writer.writerow(['seq', 'sup_pos', 'sup_neg'])
+                for d in res:
+                    writer.writerow(d)
 
 
-def validate_seq_vector(data_dir):
+def validate_seq_vector(data_dir, model_idx, use_PCA=False, use_csp=True):
     patterns = []
-    data = load_json_data(os.path.join(data_dir, 'pos_0.1_sup_csp.json'))
-    for i in data:
-        if i['sup']['neg'] == 0:
+    if use_csp:
+        data = load_json_data(os.path.join(data_dir, 'pos_0.1_sup_csp_'+str(model_idx)+'.json'))
+        for i in data:
+            # if i['gr'] > 3:
             patterns.append(i['seq'])
-        elif i['sup']['pos'] / i['sup']['neg'] > 3:
+        data = load_json_data(os.path.join(data_dir, 'neg_0.1_sup_csp_'+str(model_idx)+'.json'))
+        pos_size = len(patterns)
+        for i in data:
+            # if i['sup']['pos'] == 0:
+            #     continue
             patterns.append(i['seq'])
-    data = load_json_data(os.path.join(data_dir, 'neg_0.1_sup_csp.json'))
-    print(len(patterns))
-    for i in data:
-        if i['sup']['pos'] == 0:
-            patterns.append(i['seq'])
-        elif i['sup']['neg'] / i['sup']['pos'] > 1.7:
-            if i['seq'] not in patterns:
+        neg_size = len(patterns)-pos_size
+    else:
+        data = load_json_data(os.path.join(data_dir, 'pos_0.1_sup_fsp_' + str(model_idx) + '.json'))
+        for i in data:
+            if i['sup']['neg'] + i['sup']['pos'] >= 0.2:
                 patterns.append(i['seq'])
-    print(len(patterns))
-    # exit(-1)
+        data = load_json_data(os.path.join(data_dir, 'neg_0.1_sup_fsp_' + str(model_idx) + '.json'))
+        pos_size = len(patterns)
+        for i in data:
+            if i['sup']['neg'] + i['sup']['pos'] >= 0.2:
+                if i['seq'] not in patterns:
+                    patterns.append(i['seq'])
+        neg_size = len(patterns) - pos_size
 
+    print("total patterns: {}, pos:neg = {}:{}".format(len(patterns), pos_size, neg_size))
+
+    # print(patterns)
     y_train = []
     x_train = []
     y_test = []
     x_test = []
-    data = load_json_dict(os.path.join(data_dir, 'input_sequences.json'))
+    data = load_json_dict(os.path.join(data_dir, 'input_sequences_'+str(model_idx)+'.json'))
     for eff in data:
         for i in data[eff]:
+            # i = ["X*M", "M-a", "a+a", "a+a", "a-a", "a+a", "a-a", "a+a", "a+a", "a+a", "a+a"]
             y_train.append(eff)
             _next = build_next(i)
             vec = calculate_seq_vector(_next, patterns)
             x_train.append(vec)
     # test_seq = []
-    data = load_json_dict(os.path.join(data_dir, 'test_sequences.json'))
+    data = load_json_dict(os.path.join(data_dir, 'test_sequences_'+str(model_idx)+'.json'))
+
+    seq_len = []
     for eff in data:
         for i in data[eff]:
             # test_seq.append(i)
             _next = build_next(i)
             vec = calculate_seq_vector(_next, patterns)
-            # x_test.append(vec)
-            # y_test.append(eff)
-            for j in vec:
-                if j == 1:
-                    x_test.append(vec)
-                    y_test.append(eff)
-                    break
+            y_label = eff
+            # y_label = 'neutral'
+            # for j in vec:
+            #     if j == 1:
+            #         x_test.append(vec)
+            #         y_test.append(eff)
+            #         seq_len.append(len(i))
+            #         break
+            x_test.append(vec)
+            seq_len.append(len(i))
+            y_test.append(y_label)
     print(len(x_test), len(y_test))
 
     # for n_c in range(1, 50):
@@ -670,34 +786,44 @@ def validate_seq_vector(data_dir):
         if not flag:
             if y_train[i] == 'pos':
                 pos_count += 1
-            else:
+            elif y_train[i] == 'neg':
                 neg_count += 1
+            # y_train[i] = 'neutral'
             # print(y_train[i])
-    print(len(x_train), count, pos_count, neg_count)
+    print("total train samples: {}; hit 0 pattern: {}, pos : neg = {} : {}".format(len(x_train), len(x_train)-count, pos_count, neg_count))
 
-    # pca = PCA(n_components=50)
-    # pca.fit(x_train)
-    # print(pca.explained_variance_ratio_, pca.explained_variance_ratio_.sum())
-    # train_x_new = pca.transform(x_train)
-    train_x_new = x_train
-    clf = RandomForestClassifier(n_estimators=500, oob_score=True, class_weight='balanced')
-    clf.fit(train_x_new, y_train)
-    pickle.dump(clf, open(os.path.join(data_dir, 'model.sav'), 'wb'))
-    # svm = SVC(C=0.03, gamma=0.01, class_weight='balanced')
-    # # svm = SVC(C=0.03, gamma=0.01)
-    #
-    # print(len(train_x_new), len(y_train))
-    # svm.fit(train_x_new, y_train)
+    if use_PCA:
+        pca = PCA(n_components=50)
+        pca.fit(x_train)
+        print(pca.explained_variance_ratio_, pca.explained_variance_ratio_.sum())
+        train_x_new = pca.transform(x_train)
+        clf = RandomForestClassifier(n_estimators=500, oob_score=True, class_weight='balanced')
+        clf.fit(train_x_new, y_train)
+        # if use_csp:
+        #     pickle.dump(clf, open(os.path.join(data_dir, 'model_' + str(model_idx) + '.sav'), 'wb'))
+        # else:
+        #     pickle.dump(clf, open(os.path.join(data_dir, 'model_fsp_' + str(model_idx) + '.sav'), 'wb'))
+        test_x_new = pca.transform(x_test)
+    else:
+        # clf = RandomForestClassifier(n_estimators=500, oob_score=True, class_weight='balanced')
+        clf = RandomForestClassifier(n_estimators=500, oob_score=True)
+        clf.fit(x_train, y_train)
+        # if use_csp:
+        #     pickle.dump(clf, open(os.path.join(data_dir, 'model_'+str(model_idx)+'.sav'), 'wb'))
+        # else:
+        #     pickle.dump(clf, open(os.path.join(data_dir, 'model_fsp_' + str(model_idx) + '.sav'), 'wb'))
+        test_x_new = x_test
 
-    # test_x_new = pca.transform(x_test)
-    test_x_new = x_test
-    # pred = svm.predict(train_x_new)
-    # print(confusion_matrix(y_train, pred, labels=['pos', 'neg']))
-    # print(classification_report(y_train, pred))
-    # pred = svm.predict(test_x_new)
     pred = clf.predict(test_x_new)
+
+    false_seq_len = []
+    for i in range(len(seq_len)):
+        if pred[i] != y_test[i]:
+            false_seq_len.append([seq_len[i], y_test[i]])
+
     print(confusion_matrix(y_test, pred, labels=['pos', 'neg']))
     print(classification_report(y_test, pred))
+    return y_test, pred, false_seq_len
     #
     # seq = load_json_list(data_dir+'all_sequences_symbol_ver.json')
     # seq_id = load_json_list(data_dir+'all_sequences.json')
@@ -722,12 +848,16 @@ def calculate_seq_vector(seq, patterns):
     vec = [0]*len(patterns)
     for k in range(len(patterns)):
         p = patterns[k]
+        # if p != ["a-a", "a-a"]:
+        #     continue
+        # print(p)
         flag = True
         idx = 0
         for i in range(len(p)):
             c = p[i]
+            # print(c)
             try:
-                if idx >= len(p):
+                if idx >= len(seq):
                     flag = False
                     break
                 if c in seq[idx]:
@@ -736,29 +866,33 @@ def calculate_seq_vector(seq, patterns):
                     flag = False
                     break
             except Exception:
-                print(p, idx, seq)
-                exit(-1)
+                # print(p, idx, seq)
+                flag = False  # the pattern is longer than the sequence
+                # exit(-1)
+        # print(flag)
         if flag:
             # pos_count += d[1]
             vec[k] = 1
     return vec
 
-def recommend_actions():
-    data_dir = get_global_val('result_dir')+'entropy_test/'
+def recommend_actions(repo_name, model_idx):
+    data_dir = os.path.join(get_global_val('result_dir'), repo_name)
     patterns = []
-    data = load_json_data(os.path.join(data_dir, 'pos_0.1_sup_csp.json'))
+    data = load_json_data(os.path.join(data_dir, 'pos_0.1_sup_csp_'+str(model_idx)+'.json'))
     for i in data:
-        if i['sup']['neg'] == 0:
-            patterns.append(i['seq'])
-        elif i['sup']['pos'] / i['sup']['neg'] > 3:
-            patterns.append(i['seq'])
-    data = load_json_data(os.path.join(data_dir, 'neg_0.1_sup_csp.json'))
+        patterns.append(i['seq'])
+        # if i['sup']['neg'] == 0:
+        #     patterns.append(i['seq'])
+        # elif i['sup']['pos'] / i['sup']['neg'] > 3:
+        #     patterns.append(i['seq'])
+    data = load_json_data(os.path.join(data_dir, 'neg_0.1_sup_csp_'+str(model_idx)+'.json'))
     for i in data:
-        if i['sup']['pos'] == 0:
-            patterns.append(i['seq'])
-        elif i['sup']['neg'] / i['sup']['pos'] > 1.7:
-            if i['seq'] not in patterns:
-                patterns.append(i['seq'])
+        patterns.append(i['seq'])
+        # if i['sup']['pos'] == 0:
+        #     patterns.append(i['seq'])
+        # elif i['sup']['neg'] / i['sup']['pos'] > 1.7:
+        #     if i['seq'] not in patterns:
+        #         patterns.append(i['seq'])
     # print(patterns)
     # print(pos_patterns)
 
@@ -766,33 +900,32 @@ def recommend_actions():
     for i in patterns:
         for j in i:
             cand.add(j)
-    all_seqs = load_json_list(os.path.join(data_dir, 'all_sequences_symbol_ver.json'))
-    [train_idx, test_idx] = load_json_list(os.path.join(data_dir, 'split_index.json'))
-    train_seqs = numpy.array(all_seqs, dtype=object)[train_idx]
-    test_seqs = numpy.array(all_seqs, dtype=object)[test_idx]
+
+
     # cand1, cand2 = generate_alphabet(patterns, train_seqs)
     # cand = cand1.union(cand2)
     # print(cand1)
     # print(cand2)
-    # test_ = load_json_dict(os.path.join(data_dir, 'test_sequences.json'))
-    # test_seqs = []
-    # for i in test_:
-    #     for q in test_[i]:
-    #         test_seqs.append({'seq': q})
+    test_ = load_json_dict(os.path.join(data_dir, 'test_sequences_'+str(model_idx)+'.json'))
+    test_seqs = []
+    for i in test_:
+        for q in test_[i]:
+            test_seqs.append({'seq': q})
 
     seq = ['R*X', 'X+E', 'E-H', 'H+Q', 'Q+E', 'E-H', 'H-F', 'F+E', 'E+E', "E-X", "X+U", "U-H", "H+H", "H-H"]
-    clf = pickle.load(open(os.path.join(data_dir, 'model.sav'), 'rb'))
+    clf = pickle.load(open(os.path.join(data_dir, 'model_'+str(model_idx)+'.sav'), 'rb'))
     # pred = clf.predict(seq)
     for s in test_seqs:
         s = s['seq']
         print('------------------------------------------------------------')
         print('The full sequence: {}'.format(s))
-        new_s = s[0:10]
-        subsequent_events = s[10:len(s)]
+        new_s = s[0:9]
+        subsequent_events = s[9:len(s)]
         do_recommend(new_s, patterns, clf, cand)
         for j in subsequent_events:
             new_s = new_s+[j]
             do_recommend(new_s, patterns, clf, cand)
+
 
 def generate_alphabet(data1, data2):
     res_1 = set()
@@ -820,29 +953,29 @@ def do_recommend(seq, patterns, clf, cand):
         pred_s = clf.predict([vec])[0]
         if pred_s == 'neg':
             is_neg = True
-            print("Warning: the trend of this sequence is negative.")
+            print(colored("Warning: the trend of this sequence is negative.", 'red'))
         else:
-            print("Congrats! The trend of this sequence is positive")
-    if not numpy.any(vec) or is_neg:
-        tail_e = seq[len(seq)-1][2]
-        flag = False
-        for i in cand:
-            if i[0] == tail_e:
-                new_s = seq+[i]
-                _next = build_next(new_s)
-                vec = calculate_seq_vector(_next, patterns)
-                if numpy.any(vec):
-                    # pred_s = clf.predict([vec])[0]
-                    pred_s = clf.predict_proba([vec])[0]
-                    res = {'pos': 0, 'neg': 0}
-                    for j in range(len(clf.classes_)):
-                        res[clf.classes_[j]] = pred_s[j]
-                    if res['pos'] > res['neg']:
-                        RA.append({'action': i, 'prob': res})
-                        print("Here we recommend you the following action: {} with the positive probability {}".format(i, res['pos']))
-                        flag = True
-        if not flag:
-            print('Can not found an appropriate action.')
+            print(colored("Congrats! The trend of this sequence is positive", 'green'))
+    # if not numpy.any(vec) or is_neg:
+    tail_e = seq[len(seq)-1][2]
+    flag = False
+    for i in cand:
+        if i[0] == tail_e:
+            new_s = seq+[i]
+            _next = build_next(new_s)
+            vec = calculate_seq_vector(_next, patterns)
+            if numpy.any(vec):
+                # pred_s = clf.predict([vec])[0]
+                pred_s = clf.predict_proba([vec])[0]
+                res = {'pos': 0, 'neg': 0}
+                for j in range(len(clf.classes_)):
+                    res[clf.classes_[j]] = pred_s[j]
+                if res['pos'] > res['neg']:
+                    RA.append({'action': i, 'prob': res})
+                    print(colored("Here we recommend you the following action: {} with the positive probability {}".format(i, res['pos']), 'yellow'))
+                    flag = True
+    if not flag:
+        print('Can not found an appropriate action.')
     return RA
 
 def translate_seq(s, event_map, time_map):
@@ -1044,7 +1177,7 @@ def time_discretize_entropy_auto(write_dir, pair, gene_interval=False):
 def dataset_time_discretize(x_train, y_train, write_dir):
     generate_dataset_event_interval(x_train, y_train, write_dir)
 
-    event_interval = load_json_dict(write_dir + 'event_interval.json')
+    event_interval = load_json_dict(os.path.join(write_dir, 'event_interval.json'))
     interval_split = {}
     # information gain
 
@@ -1102,16 +1235,35 @@ def dataset_time_discretize(x_train, y_train, write_dir):
                 interval_split[e].append(data[pos][0])
                 # print(interval_split[e])
 
-    write_json_dict(interval_split, write_dir + 'interval_split_auto_entropy.json')
+    write_json_dict(interval_split, os.path.join(write_dir, 'interval_split_auto_entropy.json'))
     # exit(-1)
 
 
-def generate_dataset():
-    data_dir = get_global_val('data_dir')+'sequences/'
-    neg_s = load_json_list(os.path.join(data_dir, 'issue_sequences_tensorflow_neg_cut_origin.json'))
-    pos_s = load_json_list(os.path.join(data_dir, 'issue_sequences_tensorflow_pos_cut_origin.json'))
+def dataset_time_discretize_quartile(x_train, y_train, write_dir):
+    generate_dataset_event_interval(x_train, y_train, write_dir)
+
+    event_interval = load_json_dict(os.path.join(write_dir, 'event_interval.json'))
+    interval_split = {}
+    # information gain
+
+    for e in event_interval:
+        data = sorted(event_interval[e], key=lambda x: int(x[0]))
+        temp = []
+        for i in data:
+            temp.append(i[0])
+        qs = list(numpy.percentile(temp, (25, 50, 75), method='midpoint'))
+        interval_split[e] = qs
+    write_json_dict(interval_split, os.path.join(write_dir, 'interval_split_auto_entropy.json'))
+
+
+def generate_dataset(repo_name):
+    data_dir = get_global_val('data_dir')+repo_name
+    neg_s = load_json_list(os.path.join(data_dir, 'issue_sequences_neg_cut_origin.json'))
+    pos_s = load_json_list(os.path.join(data_dir, 'issue_sequences_pos_cut_origin.json'))
+    med_s = load_json_list(os.path.join(data_dir, 'issue_sequences_med_cut_origin.json'))
     X = []
     Y = []
+    # M = []
     D = []
     for i in neg_s:
         X.append(i['action_sequence'])
@@ -1121,6 +1273,10 @@ def generate_dataset():
         X.append(i['action_sequence'])
         Y.append('pos')
         D.append({'_id': i['_id'], 'seq': i['action_sequence'], 'cls': 'pos'})
+    # for i in med_s:
+    #     X.append(i['action_sequence'])
+    #     Y.append('med')
+    #     D.append({'_id': i['_id'], 'seq': i['action_sequence'], 'cls': 'med'})
     return X, Y, D
 
 
