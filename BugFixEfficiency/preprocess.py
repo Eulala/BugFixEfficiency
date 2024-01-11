@@ -201,12 +201,14 @@ def classify_sequence(repo_name, len_, use_fix=True):
 
     print(qs, K_max, K_min)
 
+    fix_time_new = {}
     year_fix_time = {}
     for i in data:
         t = fix_time[i['_id']]
         if t > K_max or t < K_min:
             # outlier
             continue
+        fix_time_new[i['_id']] = t
 
         year = i['action_sequence'][0]['occur_at'].split('-')[0]
         if year not in year_fix_time:
@@ -248,15 +250,19 @@ def classify_sequence(repo_name, len_, use_fix=True):
     # thresholds = 90*60*24
     # min_time = 30*60*24
     # qs = qs_2
-    # thresholds = qs[1]
+    thresholds = 60*24*60
     # print(thresholds)
+    qs = numpy.percentile(list(fix_time_new.values()), (25, 50, 75), method='midpoint')
+    print(qs)
     for i in data:
         try:
             # if fix_time[i['_id']] <= 1*24*60:
             #     continue
-            if fix_time[i['_id']] <= 3*24*60:
+            if fix_time[i['_id']] >= K_max or fix_time[i['_id']] < K_min:
+                continue
+            if fix_time[i['_id']] <= qs[0]:
                 fast_i.append(i)
-            elif fix_time[i['_id']] > 3*24*60:
+            elif fix_time[i['_id']] >= qs[2]:
                 slow_i.append(i)
             else:
                 median_i.append(i)
@@ -302,7 +308,7 @@ def classify_sequence(repo_name, len_, use_fix=True):
     # delete actor and the last closed event
     pos = []
     neg = []
-    med = []
+    neu = []
     for i in slow_i:
         temp = {'_id': i['_id'], 'action_sequence': []}
         for a in range(len(i['action_sequence'])-1):
@@ -320,14 +326,14 @@ def classify_sequence(repo_name, len_, use_fix=True):
         for a in range(len(i['action_sequence']) - 1):
             e = i['action_sequence'][a]
             temp['action_sequence'].append({'event_type': e['event_type'], 'occur_at': e['occur_at']})
-        med.append(temp)
+        neu.append(temp)
 
     data_dir = os.path.join(data_dir, repo_name)
     if not os.path.exists(data_dir):
         os.mkdir(data_dir)
     write_json_list(pos, os.path.join(data_dir, 'issue_sequences_pos.json'))
     write_json_list(neg, os.path.join(data_dir, 'issue_sequences_neg.json'))
-    write_json_list(med, os.path.join(data_dir, 'issue_sequences_med.json'))
+    write_json_list(neu, os.path.join(data_dir, 'issue_sequences_neu.json'))
     return thresholds
     # return max_fast
 

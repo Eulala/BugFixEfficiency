@@ -138,11 +138,12 @@ def generate_event_id(repo_name, write_path, ignore_events=set()):
 
 
 def model_sequence(repo_name):
-    data_dir = os.path.join(get_global_val('data_dir'), repo_name)
+    data_dir = get_global_val('data_dir')
     event_id = load_event_id(os.path.join(data_dir, 'event_id.json'))
 
+    data_dir = os.path.join(get_global_val('data_dir'), repo_name)
     # files = os.listdir(data_dir)
-    files = ['issue_sequences_neg.json', 'issue_sequences_pos.json', 'issue_sequences_med.json']
+    files = ['issue_sequences_neg.json', 'issue_sequences_pos.json', 'issue_sequences_neu.json']
     for f in files:
         res = []
         data = load_json_list(os.path.join(data_dir, f))
@@ -204,10 +205,11 @@ def generate_input_sequence(write_dir, use_entropy=False, file_suffix=None):
         write_json_dict(sequences, write_dir + repo + '_sequences_symbol_ver.json')
 
 
-def generate_input_sequence_ete(x_train, y_train, write_dir, filename, use_entropy=False):
+def generate_input_sequence_ete(x_train, y_train, write_dir, filename, use_entropy=False, include_med=False):
     # interval_dir = os.path.abspath(os.path.join(write_dir, ".."))
     input_sequences = {'pos': [], 'neg': []}
-    # input_sequences = {'pos': [], 'neg': [], 'med': []}
+    if include_med:
+        input_sequences = {'pos': [], 'neg': [], 'neu': []}
     sequences = {}
     if use_entropy:
         interval_split = load_json_dict(os.path.join(write_dir, 'interval_split_auto_entropy.json'))
@@ -464,7 +466,7 @@ def temp_test():
     # root.print_tree()
 
 
-def CDSPM(data_dir, count, min_gr=1.5):
+def CDSPM(data_dir, count, min_gr=1.5, file_predix=None):
     # temp_test()
     # exit(-1)
     # Ck = ['123', '125', '153', '234', '253', '345', '534']
@@ -495,8 +497,8 @@ def CDSPM(data_dir, count, min_gr=1.5):
             opposite_type = 'pos'
         min_con = 1.0
         for min_sup in range(1, 2):
-            min_sup = min_sup / 10
-            # min_sup = 0.05
+            # min_sup = min_sup / 10
+            min_sup = 0.05
             root_c = GSPTree()
             root_g = GDSPTree()
 
@@ -541,8 +543,12 @@ def CDSPM(data_dir, count, min_gr=1.5):
                 Ck = GSP(Fk)
                 k += 1
 
-            write_json_data(csp, os.path.join(data_dir, pattern_type + '_' + str(min_sup) + '_sup_csp_'+str(count)+'.json'))
-            write_json_data(fsp, os.path.join(data_dir, pattern_type + '_' + str(min_sup) + '_sup_fsp_'+str(count)+'.json'))
+            if file_predix is None:
+                write_json_data(csp, os.path.join(data_dir, "{}_{}_sup_csp_{}.json".format(pattern_type, min_sup, count)))
+                write_json_data(fsp, os.path.join(data_dir, "{}_{}_sup_fsp_{}.json".format(pattern_type, min_sup, count)))
+            else:
+                write_json_data(csp, os.path.join(data_dir, "{}_{}_{}_sup_csp_{}.json".format(file_predix, pattern_type, min_sup, count)))
+                write_json_data(fsp, os.path.join(data_dir, "{}_{}_{}_sup_fsp_{}.json".format(file_predix, pattern_type, min_sup, count)))
 
             end = time.time()
             print("min_sup = {}, Runtime: {}".format(min_sup, end - start))
@@ -658,7 +664,7 @@ def get_csp(min_gr, D_size, Fp, target_type, opposite_type):
 
 def translate_result(dir_name):
     data_dir = os.path.join(get_global_val('result_dir'), "{}_9_total".format(dir_name))
-    event_dir = os.path.join(get_global_val('data_dir'), dir_name)
+    event_dir = os.path.join(get_global_val('data_dir'))
     event_id = load_event_id(os.path.join(event_dir, 'event_id.json'))
 
     for p_type in ['csp', 'fsp']:
@@ -702,11 +708,11 @@ def translate_result(dir_name):
 def validate_seq_vector(data_dir, model_idx, use_PCA=False, use_csp=True):
     patterns = []
     if use_csp:
-        data = load_json_data(os.path.join(data_dir, 'pos_0.1_sup_csp_'+str(model_idx)+'.json'))
+        data = load_json_data(os.path.join(data_dir, 'pos_0.05_sup_csp_'+str(model_idx)+'.json'))
         for i in data:
             # if i['gr'] > 3:
             patterns.append(i['seq'])
-        data = load_json_data(os.path.join(data_dir, 'neg_0.1_sup_csp_'+str(model_idx)+'.json'))
+        data = load_json_data(os.path.join(data_dir, 'neg_0.05_sup_csp_'+str(model_idx)+'.json'))
         pos_size = len(patterns)
         for i in data:
             # if i['sup']['pos'] == 0:
@@ -774,6 +780,7 @@ def validate_seq_vector(data_dir, model_idx, use_PCA=False, use_csp=True):
     yy_train = []
     pos_count = 0
     neg_count = 0
+    med_count = 0
     for i in range(len(x_train)):
         flag = False
         for u in x_train[i]:
@@ -790,7 +797,8 @@ def validate_seq_vector(data_dir, model_idx, use_PCA=False, use_csp=True):
                 neg_count += 1
             # y_train[i] = 'neutral'
             # print(y_train[i])
-    print("total train samples: {}; hit 0 pattern: {}, pos : neg = {} : {}".format(len(x_train), len(x_train)-count, pos_count, neg_count))
+    print("total train samples: {}; hit 0 pattern: {}, pos : neg = {} : {}".
+          format(len(x_train), len(x_train)-count, pos_count, neg_count))
 
     if use_PCA:
         pca = PCA(n_components=50)
@@ -806,7 +814,7 @@ def validate_seq_vector(data_dir, model_idx, use_PCA=False, use_csp=True):
         test_x_new = pca.transform(x_test)
     else:
         # clf = RandomForestClassifier(n_estimators=500, oob_score=True, class_weight='balanced')
-        clf = RandomForestClassifier(n_estimators=500, oob_score=True)
+        clf = RandomForestClassifier(n_estimators=500, oob_score=True, class_weight='balanced')
         clf.fit(x_train, y_train)
         # if use_csp:
         #     pickle.dump(clf, open(os.path.join(data_dir, 'model_'+str(model_idx)+'.sav'), 'wb'))
@@ -824,6 +832,226 @@ def validate_seq_vector(data_dir, model_idx, use_PCA=False, use_csp=True):
     print(confusion_matrix(y_test, pred, labels=['pos', 'neg']))
     print(classification_report(y_test, pred))
     return y_test, pred, false_seq_len
+
+def validate_seq_vector_2(data_dir, model_idx, use_PCA=False, use_csp=True, predix='fast'):
+    patterns = []
+    if use_csp:
+        data = load_json_data(os.path.join(data_dir, predix+'_pos_0.05_sup_csp_' + str(model_idx) + '.json'))
+        for i in data:
+            patterns.append(i['seq'])
+        data = load_json_data(os.path.join(data_dir, predix+'_neg_0.05_sup_csp_' + str(model_idx) + '.json'))
+        pos_size = len(patterns)
+        for i in data:
+            patterns.append(i['seq'])
+        neg_size = len(patterns) - pos_size
+    else:
+        data = load_json_data(os.path.join(data_dir, 'pos_0.1_sup_fsp_' + str(model_idx) + '.json'))
+        for i in data:
+            if i['sup']['neg'] + i['sup']['pos'] >= 0.2:
+                patterns.append(i['seq'])
+        data = load_json_data(os.path.join(data_dir, 'neg_0.1_sup_fsp_' + str(model_idx) + '.json'))
+        pos_size = len(patterns)
+        for i in data:
+            if i['sup']['neg'] + i['sup']['pos'] >= 0.2:
+                if i['seq'] not in patterns:
+                    patterns.append(i['seq'])
+        neg_size = len(patterns) - pos_size
+
+    print("total patterns: {}, pos:neg = {}:{}".format(len(patterns), pos_size, neg_size))
+
+    # print(patterns)
+    y_train = []
+    x_train = []
+    y_test = []
+    x_test = []
+    data = load_json_dict(os.path.join(data_dir, 'train_sequences_{}_{}.json'.format(model_idx, predix)))
+    for eff in data:
+        for i in data[eff]:
+            # i = ["X*M", "M-a", "a+a", "a+a", "a-a", "a+a", "a-a", "a+a", "a+a", "a+a", "a+a"]
+            if eff == 'neu':
+                if predix == 'fast':
+                    eff = 'neg'
+                else:
+                    eff = 'pos'
+            y_train.append(eff)
+            _next = build_next(i)
+            vec = calculate_seq_vector(_next, patterns)
+            x_train.append(vec)
+    # test_seq = []
+    data = load_json_dict(os.path.join(data_dir, 'test_sequences_{}_{}.json'.format(model_idx, predix)))
+
+    seq_len = []
+    for eff in data:
+        for i in data[eff]:
+            # test_seq.append(i)
+            _next = build_next(i)
+            vec = calculate_seq_vector(_next, patterns)
+            if eff == 'neu':
+                if predix == 'fast':
+                    eff = 'neg'
+                else:
+                    eff = 'pos'
+            y_label = eff
+            x_test.append(vec)
+            seq_len.append(len(i))
+            y_test.append(y_label)
+    print(len(x_test), len(y_test))
+
+    count = 0
+    xx_train = []
+    yy_train = []
+    pos_count = 0
+    neg_count = 0
+    med_count = 0
+    for i in range(len(x_train)):
+        flag = False
+        for u in x_train[i]:
+            if u == 1:
+                count += 1
+                flag = True
+                xx_train.append(x_train[i])
+                yy_train.append(y_train[i])
+                break
+        if not flag:
+            if y_train[i] == 'pos':
+                pos_count += 1
+            elif y_train[i] == 'neg':
+                neg_count += 1
+            # y_train[i] = 'neutral'
+            # print(y_train[i])
+    print("total train samples: {}; hit 0 pattern: {}, pos : neg = {} : {}".
+          format(len(x_train), len(x_train)-count, pos_count, neg_count))
+
+    train_x_new = x_train
+    test_x_new = x_test
+    if use_PCA and len(x_train[0]) > 50:
+        pca = PCA(n_components=50)
+        pca.fit(x_train)
+        print(pca.explained_variance_ratio_, pca.explained_variance_ratio_.sum())
+        train_x_new = pca.transform(x_train)
+        test_x_new = pca.transform(x_test)
+
+    clf = RandomForestClassifier(n_estimators=500, oob_score=True, class_weight='balanced')
+    clf.fit(train_x_new, y_train)
+    # clf = RandomForestClassifier(n_estimators=500, oob_score=True)
+
+    pred = clf.predict(test_x_new)
+
+    false_seq_len = []
+    for i in range(len(seq_len)):
+        if pred[i] != y_test[i]:
+            false_seq_len.append([seq_len[i], y_test[i]])
+
+    print(confusion_matrix(y_test, pred, labels=['pos', 'neg']))
+    print(classification_report(y_test, pred))
+    return y_test, pred, false_seq_len
+
+
+def validate_seq_vector_3(data_dir, model_idx, use_PCA=False, use_csp=True):
+    patterns = {'fast': [], 'slow': []}
+    if use_csp:
+        for _type in ['fast', 'slow']:
+            data = load_json_data(os.path.join(data_dir, _type + '_pos_0.05_sup_csp_' + str(model_idx) + '.json'))
+            for i in data:
+                # if i['gr'] > 3:
+                patterns[_type].append(i['seq'])
+            data = load_json_data(os.path.join(data_dir, _type + '_neg_0.05_sup_csp_' + str(model_idx) + '.json'))
+            pos_size = len(patterns[_type])
+            for i in data:
+                # if i['sup']['pos'] == 0:
+                #     continue
+                patterns[_type].append(i['seq'])
+            neg_size = len(patterns[_type]) - pos_size
+            print("{} patterns: {}, pos:neg = {}:{}".format(_type, len(patterns[_type]), pos_size, neg_size))
+    else:
+        data = load_json_data(os.path.join(data_dir, 'pos_0.1_sup_fsp_' + str(model_idx) + '.json'))
+        for i in data:
+            if i['sup']['neg'] + i['sup']['pos'] >= 0.2:
+                patterns.append(i['seq'])
+        data = load_json_data(os.path.join(data_dir, 'neg_0.1_sup_fsp_' + str(model_idx) + '.json'))
+        pos_size = len(patterns)
+        for i in data:
+            if i['sup']['neg'] + i['sup']['pos'] >= 0.2:
+                if i['seq'] not in patterns:
+                    patterns.append(i['seq'])
+        neg_size = len(patterns) - pos_size
+
+    y_train = []
+    x_train = []
+    y_test = []
+    x_test = []
+    data1 = load_json_dict(os.path.join(data_dir, 'train_sequences_' + str(model_idx) + '_fast'+'.json'))
+    data2 = load_json_dict(os.path.join(data_dir, 'train_sequences_' + str(model_idx) + '_slow' + '.json'))
+    for eff in data1:
+        for i in range(len(data1[eff])):
+            y_train.append(eff)
+            _next = build_next(data1[eff][i])
+            vec = calculate_seq_vector(_next, patterns['fast'])
+            _next = build_next(data2[eff][i])
+            vec += calculate_seq_vector(_next, patterns['slow'])
+            x_train.append(vec)
+    data1 = load_json_dict(os.path.join(data_dir, 'test_sequences_' + str(model_idx) + '_fast' + '.json'))
+    data2 = load_json_dict(os.path.join(data_dir, 'test_sequences_' + str(model_idx) + '_slow' + '.json'))
+    # seq_len = []
+    for eff in data1:
+        for i in range(len(data1[eff])):
+            # test_seq.append(i)
+            _next = build_next(data1[eff][i])
+            vec = calculate_seq_vector(_next, patterns['fast'])
+            _next = build_next(data2[eff][i])
+            vec += calculate_seq_vector(_next, patterns['slow'])
+            y_label = eff
+            x_test.append(vec)
+            # seq_len.append(len(i))
+            y_test.append(y_label)
+    print(len(x_test), len(y_test))
+
+    count = 0
+    pos_count = 0
+    neg_count = 0
+    med_count = 0
+    for i in range(len(x_train)):
+        flag = False
+        for u in x_train[i]:
+            if u == 1:
+                count += 1
+                flag = True
+                break
+        if not flag:
+            if y_train[i] == 'pos':
+                pos_count += 1
+            elif y_train[i] == 'neg':
+                neg_count += 1
+            else:
+                med_count += 1
+            # y_train[i] = 'neutral'
+            # print(y_train[i])
+    print("total train samples: {}; hit 0 pattern: {}, pos : neu : neg= {} : {} : {}".
+          format(len(x_train), len(x_train) - count, pos_count, med_count, neg_count))
+
+    train_x_new = x_train
+    test_x_new = x_test
+    if use_PCA and len(x_train[0]) > 50:
+        pca = PCA(n_components=50)
+        pca.fit(x_train)
+        print(pca.explained_variance_ratio_, pca.explained_variance_ratio_.sum())
+        train_x_new = pca.transform(x_train)
+        test_x_new = pca.transform(x_test)
+
+    clf = RandomForestClassifier(n_estimators=500, oob_score=True, class_weight='balanced')
+    # clf = RandomForestClassifier(n_estimators=500, oob_score=True)
+    clf.fit(train_x_new, y_train)
+
+    pred = clf.predict(test_x_new)
+
+    false_seq_len = []
+    # for i in range(len(seq_len)):
+    #     if pred[i] != y_test[i]:
+    #         false_seq_len.append([seq_len[i], y_test[i]])
+
+    print(confusion_matrix(y_test, pred, labels=['pos', 'neu', 'neg']))
+    print(classification_report(y_test, pred))
+    return y_test, pred, false_seq_len
     #
     # seq = load_json_list(data_dir+'all_sequences_symbol_ver.json')
     # seq_id = load_json_list(data_dir+'all_sequences.json')
@@ -834,8 +1062,6 @@ def validate_seq_vector(data_dir, model_idx, use_PCA=False, use_csp=True):
     #         print(seq_id[idx]['_id'])
     #         print(y_test[i], pred[i], test_seq[i], x_test[i])
 
-
-
     # test_x_new = pca.transform(x_test)
 
     # clf = GaussianNB()
@@ -843,7 +1069,6 @@ def validate_seq_vector(data_dir, model_idx, use_PCA=False, use_csp=True):
     #
     # print(confusion_matrix(y_test, pred, labels=['pos', 'neg']))
     # print(classification_report(y_test, pred))
-
 def calculate_seq_vector(seq, patterns):
     vec = [0]*len(patterns)
     for k in range(len(patterns)):
@@ -875,108 +1100,186 @@ def calculate_seq_vector(seq, patterns):
             vec[k] = 1
     return vec
 
-def recommend_actions(repo_name, model_idx):
-    data_dir = os.path.join(get_global_val('result_dir'), repo_name)
+def train_model(data_dir, patterns, model_idx, predix):
+    y_train = []
+    x_train = []
+    data = load_json_dict(os.path.join(data_dir, 'train_sequences_{}_{}.json'.format(model_idx, predix)))
+    for eff in data:
+        for i in data[eff]:
+            if eff == 'neu':
+                if predix == 'fast':
+                    eff = 'neg'
+                else:
+                    eff = 'pos'
+            y_train.append(eff)
+            _next = build_next(i)
+            vec = calculate_seq_vector(_next, patterns)
+            x_train.append(vec)
+
+    # clf = RandomForestClassifier(n_estimators=500, oob_score=True, class_weight='balanced')
+    clf = RandomForestClassifier(n_estimators=500, oob_score=True)
+    clf.fit(x_train, y_train)
+    pickle.dump(clf, open(os.path.join(data_dir, 'model_{}_{}.sav'.format(predix, model_idx)), 'wb'))
+
+    return clf
+
+def recommend_actions(repo_name, model_idx, _type='fast'):
+    data_dir = get_global_val('data_dir')
+    event_id = load_event_id(os.path.join(data_dir, 'event_id.json'))
+    events = list(event_id.values())
+
+    data_dir = os.path.join(get_global_val('result_dir'), "{}_9_29".format(repo_name))
+
     patterns = []
-    data = load_json_data(os.path.join(data_dir, 'pos_0.1_sup_csp_'+str(model_idx)+'.json'))
+    data = load_json_data(os.path.join(data_dir, '{}_pos_0.05_sup_csp_{}.json'.format(_type, model_idx)))
     for i in data:
         patterns.append(i['seq'])
-        # if i['sup']['neg'] == 0:
-        #     patterns.append(i['seq'])
-        # elif i['sup']['pos'] / i['sup']['neg'] > 3:
-        #     patterns.append(i['seq'])
-    data = load_json_data(os.path.join(data_dir, 'neg_0.1_sup_csp_'+str(model_idx)+'.json'))
+    data = load_json_data(os.path.join(data_dir, '{}_neg_0.05_sup_csp_{}.json'.format(_type, model_idx)))
     for i in data:
         patterns.append(i['seq'])
-        # if i['sup']['pos'] == 0:
-        #     patterns.append(i['seq'])
-        # elif i['sup']['neg'] / i['sup']['pos'] > 1.7:
-        #     if i['seq'] not in patterns:
-        #         patterns.append(i['seq'])
-    # print(patterns)
-    # print(pos_patterns)
 
-    cand = set()
-    for i in patterns:
-        for j in i:
-            cand.add(j)
+    if not os.path.exists(os.path.join(data_dir, 'model_{}_{}.sav'.format(_type, model_idx))):
+        train_model(data_dir, patterns, model_idx, predix=_type)
 
+    clf = pickle.load(open(os.path.join(data_dir, 'model_{}_{}.sav'.format(_type, model_idx)), 'rb'))
 
-    # cand1, cand2 = generate_alphabet(patterns, train_seqs)
-    # cand = cand1.union(cand2)
-    # print(cand1)
-    # print(cand2)
-    test_ = load_json_dict(os.path.join(data_dir, 'test_sequences_'+str(model_idx)+'.json'))
+    test_data = load_json_dict(os.path.join(data_dir, 'test_sequences_{}_{}.json'.format(model_idx, _type)))
     test_seqs = []
-    for i in test_:
-        for q in test_[i]:
-            test_seqs.append({'seq': q})
 
-    seq = ['R*X', 'X+E', 'E-H', 'H+Q', 'Q+E', 'E-H', 'H-F', 'F+E', 'E+E', "E-X", "X+U", "U-H", "H+H", "H-H"]
-    clf = pickle.load(open(os.path.join(data_dir, 'model_'+str(model_idx)+'.sav'), 'rb'))
-    # pred = clf.predict(seq)
-    for s in test_seqs:
-        s = s['seq']
-        print('------------------------------------------------------------')
-        print('The full sequence: {}'.format(s))
-        new_s = s[0:9]
-        subsequent_events = s[9:len(s)]
-        do_recommend(new_s, patterns, clf, cand)
-        for j in subsequent_events:
-            new_s = new_s+[j]
-            do_recommend(new_s, patterns, clf, cand)
+    for i in test_data['pos']:
+        test_seqs.append({'seq': i})
+    if _type == 'slow':
+        for i in test_data['neu']:
+            test_seqs.append({'seq': i})
+
+    print("total sequences: {}".format(len(test_seqs)))
+
+    item_set = generate_pattern_item(patterns)
+
+    top_k = [1, 5, 10]
+    res = {}
+    for k in range(9, 29):
+        print('------------Recommend the {}th action---------'.format(k+2))
+        hit_count = {}
+        total_count = {}
+        random_hit = {}
+        for i in top_k:
+            hit_count[i] = 0
+            total_count[i] = 0
+            random_hit[i] = 0
+
+        for s in tqdm.tqdm(test_seqs):
+            s = s['seq']
+            s_id = "".join(s)
+            if s_id not in res:
+                res[s_id] = {'seq': s, 'RA_List': []}
+            if len(s) <= k+1:
+                continue
+            cur_e = s[k]
+            next_e = s[k+1]
+            new_s = s[0:k]
+            cand = generate_cand(cur_e[2], events)
+            s_proba, RA = do_recommend(new_s, patterns, item_set, clf, cand)
+            res[s_id]['RA_List'].append({'seq_proba': s_proba, 'RA': RA})
+            for ki in top_k:
+                SA = select_top_k(events, RA, top_k=ki)
+                control_A = random.sample(events, ki)
+                # print(SA, control_A, next_e)
+                if next_e[2] in SA:
+                    hit_count[ki] += 1
+                if next_e[2] in control_A:
+                    random_hit[ki] += 1
+                total_count[ki] += 1
+
+        for ki in top_k:
+            if total_count[ki] >= 1:
+                HR = round(hit_count[ki] / total_count[ki], 2)
+                control_HR = round(random_hit[ki] / total_count[ki], 2)
+                print("Total Sequence: {}, Hit Rate@{}: {}, random hit: {}".format(total_count[ki], ki, HR, control_HR))
+
+    write_json_list(res, os.path.join(data_dir, 'recommend_actions_{}_{}.json'.format(model_idx, _type)))
+
+def generate_cand(e, events):
+    res = set()
+    for i in events:
+        for n in ['+', '-', '*', '.']:
+            res.add(e+n+i)
+    return res
 
 
-def generate_alphabet(data1, data2):
-    res_1 = set()
-    res_2 = set()
-    for i in data1:
-        for j in i:
-            res_1.add(j)
+def generate_pattern_item(patterns):
+    items = set()
+    for p in patterns:
+        for i in p:
+            items.add(i)
+    return items
 
-    for i in data2:
-        for j in i['seq']:
-            res_2.add(j)
-
-    res_2 = res_2-res_1
-    return res_1, res_2
-
-
-def do_recommend(seq, patterns, clf, cand):
-    print("The current sequence: {}".format(seq))
+def do_recommend(seq, patterns, item_set, clf, cand):
+    # print("The current sequence: {}".format(seq))
     RA = []
+    # print(cand, item_set)
+    select_cand = cand.intersection(item_set)
+    # rest_cand = cand - item_set
+
     _next = build_next(seq)
     vec = calculate_seq_vector(_next, patterns)
-    is_neg = False
+    origin_proba = {'pos': 0.5, 'neg': 0.5}
     if numpy.any(vec):
-        # contain some pattern(s)
-        pred_s = clf.predict([vec])[0]
-        if pred_s == 'neg':
-            is_neg = True
-            print(colored("Warning: the trend of this sequence is negative.", 'red'))
+        pred_s = clf.predict_proba([vec])[0]
+        for j in range(len(clf.classes_)):
+            origin_proba[clf.classes_[j]] = pred_s[j]
+
+    for i in select_cand:
+        new_s = seq+[i]
+        _next = build_next(new_s)
+        vec = calculate_seq_vector(_next, patterns)
+        if numpy.any(vec):
+            pred_s = clf.predict_proba([vec])[0]
+            res = {'pos': 0.5, 'neg': 0.5}
+            for j in range(len(clf.classes_)):
+                res[clf.classes_[j]] = pred_s[j]
+            RA.append({'action': i, 'prob': res})
         else:
-            print(colored("Congrats! The trend of this sequence is positive", 'green'))
-    # if not numpy.any(vec) or is_neg:
-    tail_e = seq[len(seq)-1][2]
-    flag = False
-    for i in cand:
-        if i[0] == tail_e:
-            new_s = seq+[i]
-            _next = build_next(new_s)
-            vec = calculate_seq_vector(_next, patterns)
-            if numpy.any(vec):
-                # pred_s = clf.predict([vec])[0]
-                pred_s = clf.predict_proba([vec])[0]
-                res = {'pos': 0, 'neg': 0}
-                for j in range(len(clf.classes_)):
-                    res[clf.classes_[j]] = pred_s[j]
-                if res['pos'] > res['neg']:
-                    RA.append({'action': i, 'prob': res})
-                    print(colored("Here we recommend you the following action: {} with the positive probability {}".format(i, res['pos']), 'yellow'))
-                    flag = True
-    if not flag:
-        print('Can not found an appropriate action.')
-    return RA
+            RA.append({'action': i, 'prob': origin_proba})
+
+    return origin_proba, RA
+
+
+def select_top_k(event_sets, actions, top_k):
+    actions = sorted(actions, key=lambda x: x['prob']['pos'], reverse=True)
+
+    exist_a = set()
+    ranked_a = {}
+    for i in actions:
+        if i['action'][2] in exist_a:
+            continue
+        if i['prob']['pos'] not in ranked_a:
+            ranked_a[i['prob']['pos']] = []
+        ranked_a[i['prob']['pos']].append(i['action'][2])
+        exist_a.add(i['action'][2])
+
+    rest_e = set(event_sets) - exist_a
+    if 0.5 not in ranked_a:
+        ranked_a[0.5] = []
+    for i in rest_e:
+        ranked_a[0.5].append(i)
+
+    # print(ranked_a)
+    ranked_a = dict(sorted(ranked_a.items(), key=lambda x: x[0], reverse=True))
+    res = set()
+    # print(ranked_a)
+    for i in ranked_a:
+        if len(ranked_a[i]) >= top_k - len(res):
+            temp = random.sample(ranked_a[i], top_k - len(res))
+        else:
+            temp = ranked_a[i]
+        for e in temp:
+            res.add(e)
+
+        if len(res) == top_k:
+            break
+    return res
+
 
 def translate_seq(s, event_map, time_map):
     res = ''
@@ -1051,7 +1354,6 @@ def find_split_by_entropy(data, sum_p=[], sum_n=[]):
         # print(i, len(data), IG)
     # print(max_I)
     return best_split
-
 
 def generate_event_interval(write_dir, pair=False):
     data_dir = get_global_val('data_dir')+'sequences/'
@@ -1236,7 +1538,6 @@ def dataset_time_discretize(x_train, y_train, write_dir):
                 # print(interval_split[e])
 
     write_json_dict(interval_split, os.path.join(write_dir, 'interval_split_auto_entropy.json'))
-    # exit(-1)
 
 
 def dataset_time_discretize_quartile(x_train, y_train, write_dir):
@@ -1260,7 +1561,7 @@ def generate_dataset(repo_name):
     data_dir = get_global_val('data_dir')+repo_name
     neg_s = load_json_list(os.path.join(data_dir, 'issue_sequences_neg_cut_origin.json'))
     pos_s = load_json_list(os.path.join(data_dir, 'issue_sequences_pos_cut_origin.json'))
-    med_s = load_json_list(os.path.join(data_dir, 'issue_sequences_med_cut_origin.json'))
+    med_s = load_json_list(os.path.join(data_dir, 'issue_sequences_neu_cut_origin.json'))
     X = []
     Y = []
     # M = []
@@ -1273,10 +1574,10 @@ def generate_dataset(repo_name):
         X.append(i['action_sequence'])
         Y.append('pos')
         D.append({'_id': i['_id'], 'seq': i['action_sequence'], 'cls': 'pos'})
-    # for i in med_s:
-    #     X.append(i['action_sequence'])
-    #     Y.append('med')
-    #     D.append({'_id': i['_id'], 'seq': i['action_sequence'], 'cls': 'med'})
+    for i in med_s:
+        X.append(i['action_sequence'])
+        Y.append('neu')
+        D.append({'_id': i['_id'], 'seq': i['action_sequence'], 'cls': 'neu'})
     return X, Y, D
 
 
@@ -1361,4 +1662,3 @@ def calculate_information_gain(label_num, data_num, H):
     for i in range(_bin):
         IG -= LH[i] * (_num[i]/data_num)
     return IG
-

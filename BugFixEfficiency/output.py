@@ -2,9 +2,141 @@ import os
 
 import matplotlib.pyplot as plt
 import pandas as pd
+from scipy.stats import kstest
+from scipy.stats import spearmanr, pearsonr, kendalltau
 import seaborn as sns
 from util import *
 from pre_classification import *
+
+
+def output_table_corr():
+    data_dir = get_global_val('data_dir')
+    table_res = []
+    total = []
+    for repo in ['tensorflow', 'pytorch', 'go', 'rust', 'transformers', 'vue', 'angular',
+                 'flutter', 'flask', 'rails', 'vscode', 'kubernetes', 'cocos2d-x',
+                 'node', 'godot']:
+        len_ = 10
+        fix_time = load_json_data(os.path.join(data_dir, repo + '_closed_issues_len' + str(len_) + '_fix_time.json'))
+        avg_time = load_json_data(os.path.join(data_dir, repo + '_closed_issues_len' + str(len_) + '_avg_time.json'))
+        person_time = load_json_data(
+            os.path.join(data_dir, repo + '_closed_issues_len' + str(len_) + '_person_time.json'))
+
+        res = []
+        for i in fix_time:
+            res.append([fix_time[i], avg_time[i], person_time[i]])
+
+        df = pd.DataFrame(res, columns=['fix_time', 'avg_time', 'person_time'])
+        data_a = list(df['fix_time'])
+        data_b = list(df['avg_time'])
+        data_c = list(df['person_time'])
+        s_1, p_1 = kstest(rvs=data_a, cdf='norm', args=( ), N=20, alternative='two-sided', mode='approx')
+        s_2, p_2 = kstest(rvs=data_b, cdf='norm', args=( ), N=20, alternative='two-sided', mode='approx')
+        s_3, p_3 = kstest(rvs=data_b, cdf='norm', args=( ), N=20, alternative='two-sided', mode='approx')
+        r1, p1 = kendalltau(data_a, data_b)
+        r2, p2 = kendalltau(data_a, data_c)
+        r3, p3 = kendalltau(data_b, data_c)
+        # print(round(r1, 2), p1)
+        # print(repo)
+        # print(df.corr())
+        table_res.append([repo, len(fix_time), round(r1, 2), round(r2, 2), round(r3, 2)])
+        total += res
+
+    df = pd.DataFrame(total, columns=['fix_time', 'avg_time', 'person_time'])
+    # print(df.shape)
+    # print(df.corr())
+    data_a = list(df['fix_time'])
+    data_b = list(df['avg_time'])
+    data_c = list(df['person_time'])
+    r1, p1 = kendalltau(data_a, data_b)
+    r2, p2 = kendalltau(data_a, data_c)
+    r3, p3 = kendalltau(data_b, data_c)
+    table_res.append(['total', len(total), round(r1, 2), round(r2, 2), round(r3, 2)])
+
+    for i in table_res:
+        print("{}   & {}     & {}      & {}     & {}     \\\ ".format(i[0], i[1], i[2], i[3], i[4]))
+    # print(r1, p1)
+
+
+def output_table_acc():
+    data_dir = get_global_val('result_dir')
+    count = 1
+    table_res = []
+    for repo in ['tensorflow', 'pytorch', 'go', 'rust', 'transformers', 'vue', 'angular',
+                 'flutter', 'flask', 'rails', 'vscode', 'kubernetes', 'cocos2d-x',
+                 'node', 'godot', 'total']:
+        data = load_json_data(os.path.join(data_dir, "{}_9_29".format(repo), 'classification_report_fast.json'))
+        acc1 = round(data['accuracy'], 2)
+        f11 = round(data['weighted avg']['f1-score'], 2)
+        size = data['weighted avg']['support']
+        data = load_json_data(os.path.join(data_dir, "{}_9_29".format(repo), 'classification_report_slow.json'))
+        acc2 = round(data['accuracy'], 2)
+        f12 = round(data['weighted avg']['f1-score'], 2)
+        # data = load_json_data(os.path.join(data_dir, "{}_9_total".format(repo), 'pos_0.1_sup_csp_0.json'))
+        # len_p = len(data)
+        # data = load_json_data(os.path.join(data_dir, "{}_9_total".format(repo), 'neg_0.1_sup_csp_0.json'))
+        # len_n = len(data)
+        table_res.append("{} & {} & {} & {} & {} & {}    \\\ ".format(repo, size, acc1, f11, acc2, f12))
+        count += 1
+
+    for i in table_res:
+        print(i)
+
+
+def output_table_pattern_list():
+    data_dir = get_global_val('result_dir')
+    data = load_json_dict(os.path.join(data_dir, "{}_9_total".format('total'), 'input_sequences_0.json'))
+    n_p = len(data['pos'])
+    n_n = len(data['neg'])
+
+    n_res = []
+    map_ = {'+': 'T_1', '-': 'T_2', '*': 'T_3', '.': 'T_4'}
+    neg = load_json_data(os.path.join(data_dir, "{}_9_total".format('total'), 'neg_0.1_sup_csp_0.json'))
+    for i in neg:
+        sup_p = round(i['sup']['pos'] / n_p, 2)
+        sup_n = round(i['sup']['neg'] / n_n, 2)
+        gr = round(i['gr'], 2)
+        str_ = r"\begin{tikzcd}"
+        #   H \arrow[r, "T_3"] & H '
+
+        for idx in range(len(i['seq'])):
+            k = i['seq'][idx]
+            str_ += r' {} \arrow[r, "{}"] & {} '.format(k[0], map_[k[1]], k[2])
+            if idx < len(i['seq']) - 1:
+                str_ += r' \arrow[r, dotted] &'
+        str_ += r' \end{tikzcd}'
+        temp = [str_, sup_p, sup_n, gr]
+        if i['sup']['pos'] == 0:
+            continue
+        n_res.append(temp)
+
+    n_res = sorted(n_res, key=lambda x: x[3], reverse=True)
+
+    p_res = []
+    pos = load_json_data(os.path.join(data_dir, "{}_9_total".format('total'), 'pos_0.1_sup_csp_0.json'))
+    for i in pos:
+        sup_p = round(i['sup']['pos'] / n_p, 2)
+        sup_n = round(i['sup']['neg'] / n_n, 2)
+        gr = round(i['gr'], 2)
+        str_ = r"\begin{tikzcd}"
+        #   H \arrow[r, "T_3"] & H '
+
+        for idx in range(len(i['seq'])):
+            k = i['seq'][idx]
+            str_ += r' {} \arrow[r, "{}"] & {} '.format(k[0], map_[k[1]], k[2])
+            if idx < len(i['seq']) - 1:
+                str_ += r' \arrow[r, dotted] &'
+        str_ += r' \end{tikzcd}'
+        temp = [str_, sup_p, sup_n, gr]
+        p_res.append(temp)
+
+    p_res = sorted(p_res, key=lambda x: x[3], reverse=True)
+
+    for i in range(10):
+        print("{} & {} & {} & {} & {} \\\ \hline".format(i + 1, n_res[i][0], n_res[i][1], n_res[i][2], n_res[i][3]))
+    for i in range(10):
+        print("{} & {} & {} & {} & {} \\\ \hline".format(i + 11, p_res[i][0], p_res[i][1], p_res[i][2], p_res[i][3]))
+
 
 
 def draw_plot(df, feature, save_path, y_label, title, _type, use_efficiency=False):
@@ -449,24 +581,20 @@ def draw_false_predicted_histplot():
 def output_repos_comparison():
     # all repos comparison
     initialize()
-    root = get_global_val('result_dir')
+    root = os.path.join(get_global_val('result_dir'), 'total_9_30_paras')
     res = []
-    for repo in ['tensorflow', 'ansible', 'godot']:
-        dir_ = repo + '_9_30'
-        acc1 = load_json_data(os.path.join(root, dir_, 'classification_report.json'))['accuracy']
-        acc2 = load_json_data(os.path.join(root, dir_, 'fsp_classification_report.json'))['accuracy']
-        dir_ = dir_ + '_test'
-        acc3 = load_json_data(os.path.join(root, dir_, 'classification_report.json'))['accuracy']
-        dir_ = repo + '_9_30_ee'
-        acc4 = load_json_data(os.path.join(root, dir_, 'classification_report.json'))['accuracy']
-        res.append([repo, acc1, 'use_csp'])
-        res.append([repo, acc2, 'use_fsp'])
-        res.append([repo, acc3, 'seq:e'])
-        res.append([repo, acc4, 'seq:ee'])
-    df = pd.DataFrame(res, columns=['repo_name', 'accuracy', 'type'])
+    for min_sup in [0.05, 0.075, 0.1]:
+        for min_gr in [1.5, 1.75, 2.0]:
+            dir_ = "sup{}_gr{}".format(min_sup, min_gr)
+            acc = load_json_data(os.path.join(root, dir_, 'classification_report.json'))['accuracy']
+            res.append([min_sup, "gr = {}".format(min_gr), acc])
+    df = pd.DataFrame(res, columns=['min_sup', 'min_gr', 'accuracy'])
 
     f, ax = plt.subplots(figsize=(11, 6))
-    bar = sns.barplot(data=df, x='repo_name', y='accuracy', hue='type', palette='Set3', saturation=0.6)
+    plt.rcParams.update({
+        'font.size': 14,  # 设置字体大小为14
+    })
+    bar = sns.barplot(data=df, x='min_sup', y='accuracy', hue='min_gr', palette='Set3', saturation=0.6)
     for p in bar.patches:
         # get the height of each bar
         height = p.get_height()
@@ -477,23 +605,25 @@ def output_repos_comparison():
     #     print(bar.patches)
     #     barr.set_hatch(pattern)
     hatch_map = {}
-    hatch_set = ['-', '.', '\\', 's']
+    # hatch_set = ['-', '.', '\\', 's']
+    hatch_set = ['-', '.', 's']
     hatch_color_map = {}
-    color_set = ['#5F9EA0', '#CDC673', '#9370DB', '#CD4F39']
+    # color_set = ['#5F9EA0', '#CDC673', '#9370DB', '#CD4F39']
     count = 0
     for p in bar.patches:
         color = p.get_facecolor()
         if color not in hatch_map:
             hatch_map[color] = hatch_set[count]
-            hatch_color_map[color] = color_set[count]
+            # hatch_color_map[color] = color_set[count]
             count += 1
 
         p.set_hatch(hatch_map[color])
         p.set_edgecolor('black')
         p.set_facecolor('none')
         # p.set_edgecolor(hatch_color_map[color])
-    ax.legend(loc='upper right')
+    ax.legend(loc='best', bbox_to_anchor=(0.92, 0.9))
     plt.title('The accuracy of repos under different conditions')
+    # plt.legend(framealpha=1)
 
     figure_dir = get_global_val('figure_dir')
     plt.savefig(os.path.join(figure_dir, 'accuracy_comparison.png'), dpi=150)
@@ -505,11 +635,11 @@ def output_seq_len_comparison():
     initialize()
     root = get_global_val('result_dir')
     res = []
-    repo = 'godot'
+    repo = 'total'
     for max_len in range(10, 31):
         dir_ = repo + '_9_' + str(max_len)
         acc1 = load_json_data(os.path.join(root, dir_, 'classification_report.json'))['accuracy']
-        acc2 = load_json_data(os.path.join(root, dir_, 'fsp_classification_report.json'))['accuracy']
+        acc2 = load_json_data(os.path.join(root, dir_, 'classification_report_fsp.json'))['accuracy']
         dir_ = dir_ + '_e'
         acc3 = load_json_data(os.path.join(root, dir_, 'classification_report.json'))['accuracy']
         res.append([max_len, acc1, acc2, acc3])
@@ -519,7 +649,7 @@ def output_seq_len_comparison():
     f, ax1 = plt.subplots(figsize=(11, 6))
     plt.xlabel('max sequence length')
     # ax1.set_ylim(0.8, 1)
-    plt.title('Accuracy of '+repo)
+    plt.title('Accuracy of mixed repositories ')
     sns.lineplot(x='max_len', y='use_csp', data=df, ax=ax1, color='#3CB371', label='use csp',
                  marker='o', ci='bootstrapped', linestyle=':')
     sns.lineplot(x='max_len', y='use_fsp', data=df, ax=ax1, color='#4682B4', label='use fsp',
@@ -628,32 +758,36 @@ def output_repos_different_lenrange():
 
 if __name__ == '__main__':
     initialize()
-    root = get_global_val('result_dir')
-
-    res = []
-    for repo in ['tensorflow', 'ansible', 'godot']:
-        for min_len in range(5, 10):
-            dir_ = "{}_{}_{}".format(repo, min_len, 'total')
-            pos_count = len(load_json_data(os.path.join(root, dir_, 'pos_0.1_sup_csp_0.json')))
-            neg_count = len(load_json_data(os.path.join(root, dir_, 'neg_0.1_sup_csp_0.json')))
-            res.append([repo, pos_count, neg_count, pos_count+neg_count, min_len+1])
-
-    df = pd.DataFrame(res, columns=['repo_name', 'pos_csp_num', 'neg_csp_num', 'total_csp_num', 'min_len'])
-
-    f, ax1 = plt.subplots(figsize=(11, 6))
-    # plt.xlabel('max sequence length')
-    ax1.set_ylim(0, 200)
-    # plt.title('Accuracy of ' + repo)
-
-    sns.lineplot(x='min_len', y='total_csp_num', data=df[df['repo_name'] == 'tensorflow'], label='tensorflow',
-                 color='#3CB371', marker='o', linestyle='--')
-    sns.lineplot(x='min_len', y='total_csp_num', data=df[df['repo_name'] == 'ansible'], color='#4682B4',
-                 label='ansible', marker='s', linestyle='--')
-    sns.lineplot(x='min_len', y='total_csp_num', data=df[df['repo_name'] == 'godot'], color='#FF6A6A',
-                 label='godot', marker='^', linestyle='--')
-    ax1.legend(loc='upper left')
-    figure_dir = get_global_val('figure_dir')
-    plt.savefig(os.path.join(figure_dir, 'total_pattern_number.png'), dpi=150)
+    output_table_acc()
+    # output_seq_len_comparison()
+    # output_repos_comparison()
+    # output_table_pattern_list()
+    # root = get_global_val('result_dir')
+    #
+    # res = []
+    # for repo in ['tensorflow', 'ansible', 'godot']:
+    #     for min_len in range(5, 10):
+    #         dir_ = "{}_{}_{}".format(repo, min_len, 'total')
+    #         pos_count = len(load_json_data(os.path.join(root, dir_, 'pos_0.1_sup_csp_0.json')))
+    #         neg_count = len(load_json_data(os.path.join(root, dir_, 'neg_0.1_sup_csp_0.json')))
+    #         res.append([repo, pos_count, neg_count, pos_count+neg_count, min_len+1])
+    #
+    # df = pd.DataFrame(res, columns=['repo_name', 'pos_csp_num', 'neg_csp_num', 'total_csp_num', 'min_len'])
+    #
+    # f, ax1 = plt.subplots(figsize=(11, 6))
+    # # plt.xlabel('max sequence length')
+    # ax1.set_ylim(0, 200)
+    # # plt.title('Accuracy of ' + repo)
+    #
+    # sns.lineplot(x='min_len', y='total_csp_num', data=df[df['repo_name'] == 'tensorflow'], label='tensorflow',
+    #              color='#3CB371', marker='o', linestyle='--')
+    # sns.lineplot(x='min_len', y='total_csp_num', data=df[df['repo_name'] == 'ansible'], color='#4682B4',
+    #              label='ansible', marker='s', linestyle='--')
+    # sns.lineplot(x='min_len', y='total_csp_num', data=df[df['repo_name'] == 'godot'], color='#FF6A6A',
+    #              label='godot', marker='^', linestyle='--')
+    # ax1.legend(loc='upper left')
+    # figure_dir = get_global_val('figure_dir')
+    # plt.savefig(os.path.join(figure_dir, 'total_pattern_number.png'), dpi=150)
 
 
 

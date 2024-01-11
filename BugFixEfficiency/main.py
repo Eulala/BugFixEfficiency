@@ -13,7 +13,7 @@ from pre_classification import *
 from sklearn.model_selection import StratifiedShuffleSplit, StratifiedKFold
 
 
-def conduct_CDSPM(repo_name, max_t, min_len, max_len):
+def conduct_CDSPM_class3(repo_name, max_t, min_len, max_len):
     model_sequence(repo_name)
 
     data_dir = get_global_val('result_dir')
@@ -26,9 +26,93 @@ def conduct_CDSPM(repo_name, max_t, min_len, max_len):
     # time_discretize(data_dir,  pair=True)
 
     X, Y, D = generate_dataset(repo_name)
-    data_dir = get_global_val('result_dir') + repo_name+'_'+str(min_len)+'_'+str(max_len)
+    data_dir = os.path.join(get_global_val('result_dir'), "{}_{}_{}_new".format(repo_name, str(min_len), str(max_len)))
+    # data_dir = os.path.join(get_global_val('result_dir'), "{}_{}_{}_paras".format(repo_name, str(min_len), str(max_len)))
     if not os.path.exists(data_dir):
         os.mkdir(data_dir)
+    # data_dir = os.path.join(data_dir, "sup{}_gr{}".format(0.1, 1.75))
+    # if not os.path.exists(data_dir):
+    #     os.mkdir(data_dir)
+    write_json_list(D, os.path.join(data_dir, 'all_sequences.json'))
+
+    # d = StratifiedShuffleSplit(n_splits=10, test_size=0.1, random_state=10)
+    d = StratifiedKFold(n_splits=10, random_state=10, shuffle=True)
+
+    total_test_2 = {'fast': [], 'slow': []}
+    total_pred_2 = {'fast': [], 'slow': []}
+
+    total_test_3 = []
+    total_pred_3 = []
+    count = 1
+    for train_idx, test_idx in d.split(X, Y):
+        x_train, x_test = numpy.array(X, dtype=object)[train_idx], numpy.array(X, dtype=object)[test_idx]
+        y_train, y_test = numpy.array(Y, dtype=object)[train_idx], numpy.array(Y, dtype=object)[test_idx]
+        # dataset_time_discretize(x_train, y_train, data_dir)
+        # exit(-1)
+        write_json_list([train_idx.tolist(), test_idx.tolist()], os.path.join(data_dir, 'split_index.json'))
+
+        # fast vs not fast
+        for _type in ['fast', 'slow']:
+            new_y_train = []
+            for k in y_train:
+                if k == 'neu':
+                    if _type == 'fast':
+                        new_y_train.append('neg')
+                    else:
+                        new_y_train.append('pos')
+                else:
+                    new_y_train.append(k)
+            dataset_time_discretize(x_train, new_y_train, data_dir)
+            generate_input_sequence_ete(x_train, y_train, data_dir, "train_sequences_{}_{}.json".format(count, _type), use_entropy=True,
+                                        include_med=True)
+            generate_input_sequence_ete(x_test, y_test, data_dir, "test_sequences_{}_{}.json".format(count, _type), use_entropy=True,
+                                        include_med=True)
+            generate_input_sequence_ete(x_train, new_y_train, data_dir, 'input_sequences_' + str(count) + '.json',
+                                        use_entropy=True)
+            CDSPM(data_dir, count, min_gr=1.5, file_predix=_type)
+
+        test, pred, temp_list = validate_seq_vector_3(data_dir, count, use_csp=True, use_PCA=False)
+        total_test_3 += test
+        for i in pred:
+            total_pred_3.append(i)
+
+        for _type in ['fast', 'slow']:
+            test, pred, temp_list = validate_seq_vector_2(data_dir, count, use_csp=True, use_PCA=False, predix=_type)
+            total_test_2[_type] += test
+            for i in pred:
+                total_pred_2[_type].append(i)
+
+        count += 1
+
+    for _type in ['fast', 'slow']:
+        print('------------{} vs not {}-------------'.format(_type, _type))
+        print(confusion_matrix(total_test_2[_type], total_pred_2[_type], labels=['pos', 'neg']))
+        print(classification_report(total_test_2[_type], total_pred_2[_type]))
+        write_json_data(classification_report(total_test_2[_type], total_pred_2[_type], output_dict=True),
+                        os.path.join(data_dir, 'classification_report_{}.json'.format(_type)))
+
+    print('------------fast vs median vs slow-------------')
+    print(confusion_matrix(total_test_3, total_pred_3, labels=['pos', 'neg', 'neu']))
+    print(classification_report(total_test_3, total_pred_3))
+    write_json_data(classification_report(total_test_3, total_pred_3, output_dict=True), os.path.join(data_dir, 'classification_report_3.json'))
+
+
+def conduct_CDSPM(repo_name, max_t, min_len, max_len):
+    model_sequence(repo_name)
+
+    data_dir = get_global_val('result_dir')
+    if not os.path.exists(data_dir):
+        os.mkdir(data_dir)
+    cut_sequence(min_len, max_len, max_t, repo_name, interval=3)
+
+    X, Y, D = generate_dataset(repo_name)
+    data_dir = os.path.join(get_global_val('result_dir'), "{}_{}_{}".format(repo_name, str(min_len), str(max_len)))
+    # data_dir = os.path.join(get_global_val('result_dir'), "{}_{}_{}_paras".format(repo_name, str(min_len), str(max_len)))
+    if not os.path.exists(data_dir):
+        os.mkdir(data_dir)
+    # data_dir = os.path.join(data_dir, "sup{}_gr{}".format(0.1, 1.75))
+    # if not os.path.exists(data_dir):
+    #     os.mkdir(data_dir)
     write_json_list(D, os.path.join(data_dir, 'all_sequences.json'))
 
     # d = StratifiedShuffleSplit(n_splits=10, test_size=0.1, random_state=10)
@@ -40,34 +124,29 @@ def conduct_CDSPM(repo_name, max_t, min_len, max_len):
     for train_idx, test_idx in d.split(X, Y):
         x_train, x_test = numpy.array(X, dtype=object)[train_idx], numpy.array(X, dtype=object)[test_idx]
         y_train, y_test = numpy.array(Y, dtype=object)[train_idx], numpy.array(Y, dtype=object)[test_idx]
-        dataset_time_discretize(x_train, y_train, data_dir)
-        # dataset_time_discretize_quartile(x_train, y_train, data_dir)
+
         write_json_list([train_idx.tolist(), test_idx.tolist()], os.path.join(data_dir, 'split_index.json'))
 
-        # data_dir = get_global_val('result_dir') + '/entropy_16_26/'
-        if not os.path.exists(data_dir):
-            os.mkdir(data_dir)
-        generate_input_sequence_ete(x_train, y_train, data_dir, 'input_sequences_'+str(count)+'.json', use_entropy=True)
-        generate_input_sequence_ete(x_test, y_test, data_dir, 'test_sequences_'+str(count)+'.json', use_entropy=True)
-        # generate_med_sequence_ete(os.path.join(get_global_val('data_dir'), repo_name, 'issue_sequences_med_cut_origin.json')
-        #                           , data_dir, 'med_sequences_'+str(count)+'.json')
-        # generate_all_sequence_ete(D, data_dir, 'all_sequences_symbol_ver.json', use_entropy=True)
-
+        dataset_time_discretize(x_train, y_train, data_dir)
+        generate_input_sequence_ete(x_train, y_train, data_dir, "train_sequences_{}.json".format(count), use_entropy=True,
+                                    include_med=False)
+        generate_input_sequence_ete(x_test, y_test, data_dir, "test_sequences_{}.json".format(count), use_entropy=True,
+                                    include_med=False)
+        generate_input_sequence_ete(x_train, y_train, data_dir, 'input_sequences_' + str(count) + '.json',
+                                    use_entropy=True)
         CDSPM(data_dir, count, min_gr=1.5)
+
         test, pred, temp_list = validate_seq_vector(data_dir, count, use_csp=True)
         total_test += test
         for i in pred:
             total_pred.append(i)
-
         count += 1
-        # a = validate_seq(data_dir)
-        # acc.append(a)
-        # exit(-1)
-    # print(numpy.array(acc).mean())
 
+    print('------------thresholds = 60 days-------------')
     print(confusion_matrix(total_test, total_pred, labels=['pos', 'neg']))
     print(classification_report(total_test, total_pred))
-    write_json_data(classification_report(total_test, total_pred, output_dict=True), os.path.join(data_dir, 'classification_report.json'))
+    write_json_data(classification_report(total_test, total_pred, output_dict=True),
+                    os.path.join(data_dir, 'classification_report.json'))
 
 
 def conduct_CDSPM_total(repo_name, max_t, min_len, max_len):
@@ -82,8 +161,8 @@ def conduct_CDSPM_total(repo_name, max_t, min_len, max_len):
     CDSPM(data_dir, 0)
 
 
-def conduct_CDSPM_ablation_e(repo_name, min_len, max_len):
-    cut_sequence(min_len, max_len, repo_name, interval=3)
+def conduct_CDSPM_ablation_e(repo_name, max_t, min_len, max_len):
+    cut_sequence(min_len, max_len, max_t, repo_name, interval=3)
     X, Y, D = generate_dataset(repo_name)
     data_dir = get_global_val('result_dir') + repo_name + '_' + str(min_len) + '_' + str(max_len) + '_e'
     if not os.path.exists(data_dir):
@@ -166,7 +245,7 @@ if __name__ == '__main__':
     initialize()
 
     # extract_raw_data()
-    repo = 'tensorflow'
+    repo = 'total'
     # issue_preprocess(repo_name=repo)
     # delete_closed_by_bot(repo_name=repo)
     # data_dir = get_global_val('data_dir')+repo
@@ -177,6 +256,8 @@ if __name__ == '__main__':
     #
     min_len = 10
     max_len = 30
+    # conduct_CDSPM(repo, 99999999, min_len=min_len - 1, max_len=max_len)
+    exit(-1)
     # data_dir = get_global_val('result_dir') + 'tensorflow_9_30_test/'
     # test, pred, temp_seq = validate_seq_vector(data_dir, 1, use_PCA=True)
     # select_issue_longer_than(min_len=min_len, repo_name=repo)
@@ -199,24 +280,7 @@ if __name__ == '__main__':
     # conduct_CDSPM_total(repo, min_len=min_len - 1, max_len=30)
     # conduct_CDSPM_ablation(repo, min_len=min_len - 1, max_len=30)
 
-    # for repo_name in ['tensorflow', 'ansible', 'godot']:
-    #     min_len = 10
-    #     max_len = 26
-    #     data_dir = get_global_val('result_dir') + repo_name + '_' + str(min_len-1) + '_' + str(max_len)
-    #
-    #     false_seq = []
-    #     total_test = []
-    #     total_pred = []
-    #     for count in range(1, 11):
-    #         test, pred, temp_seq = validate_seq_vector(data_dir, count)
-    #         false_seq += temp_seq
-    #         total_test += test
-    #         for i in pred:
-    #             total_pred.append(i)
-    #     print(confusion_matrix(total_test, total_pred, labels=['pos', 'neg']))
-    #     print(classification_report(total_test, total_pred))
-    #     print(false_seq)
-    #     exit(-1)
+
 
         # write_json_list(false_seq, os.path.join(get_global_val('result_dir'), repo_name+'_false_predicted_sequence_length.json'))
 

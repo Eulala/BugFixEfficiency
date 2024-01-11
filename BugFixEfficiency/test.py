@@ -33,39 +33,33 @@ if __name__ == '__main__':
 
     initialize()
     data_dir = get_global_val('result_dir')
+
+    for repo in ['tensorflow', 'pytorch', 'go', 'rust', 'transformers', 'vue', 'angular',
+                 'flutter', 'flask', 'rails', 'vscode', 'kubernetes', 'cocos2d-x',
+                 'node', 'godot', 'total']:
+        min_len = 10
+        for max_len in range(29, 30):
+            # select_issue_longer_than(min_len=min_len, repo_name=repo)
+            # calculate_fix_time(repo_name=repo, min_len=min_len)
+            t = classify_sequence(repo_name=repo, len_=min_len)
+
+            conduct_CDSPM(repo, 99999999, min_len=min_len-1, max_len=max_len)
+
+    exit(-1)
+
     for repo in ['tensorflow', 'pytorch', 'go', 'rust', 'transformers', 'vue', 'angular',
                  'flutter', 'flask', 'rails', 'vscode', 'kubernetes', 'cocos2d-x',
                  'node', 'godot']:
         min_len = 10
-        calculate_person_time(repo_name=repo, min_len=min_len)
-    # calculate_avg_res_time(repo_name=repo, min_len=min_len)
-    # t = classify_sequence(repo_name=repo, len_=min_len, use_fix=False)
-    # for max_len in range(30, 31):
-    #     conduct_CDSPM(repo, t, min_len=min_len - 1, max_len=max_len)
-    exit(-1)
-
-    # extract_raw_data()
-    # repo = 'total'
-    # issue_preprocess(repo_name=repo)
-    # delete_closed_by_bot(repo_name=repo)
-    # data_dir = get_global_val('data_dir')+repo
-    # if not os.path.exists(data_dir):
-    #     os.mkdir(data_dir)
-    # filename = os.path.join(data_dir, 'event_id.json')
-    # generate_event_id(repo, filename)
-
-    for repo in ['tensorflow', 'pytorch', 'go', 'rust', 'transformers', 'vue', 'angular',
-                 'flutter', 'flask', 'rails', 'vscode', 'kubernetes', 'cocos2d-x',
-                 'node', 'godot']:
-        min_len = 6
         # data_dir = get_global_val('result_dir') + 'tensorflow_9_30_test/'
         # test, pred, temp_seq = validate_seq_vector(data_dir, 1, use_PCA=True)
-        select_issue_longer_than(min_len=min_len, repo_name=repo)
-        calculate_fix_time(repo_name=repo, min_len=min_len)
+        # select_issue_longer_than(min_len=min_len, repo_name=repo)
+        # calculate_fix_time(repo_name=repo, min_len=min_len)
         t = classify_sequence(repo_name=repo, len_=min_len)
 
-        for max_len in range(26, 27):
-            conduct_CDSPM(repo, t, min_len=min_len - 1, max_len=max_len)
+        for max_len in range(30, 31):
+            # conduct_CDSPM(repo, t, min_len=min_len - 1, max_len=max_len)
+            conduct_CDSPM_total(repo, t, min_len=min_len - 1, max_len=max_len)
 
     # for max_len in range(10, 31):
     #     data_dir = get_global_val('result_dir') + repo + '_' + str(min_len-1) + '_' + str(max_len)
