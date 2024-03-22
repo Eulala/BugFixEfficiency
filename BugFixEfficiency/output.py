@@ -13,9 +13,10 @@ def output_table_corr():
     data_dir = get_global_val('data_dir')
     table_res = []
     total = []
-    for repo in ['tensorflow', 'pytorch', 'go', 'rust', 'transformers', 'vue', 'angular',
-                 'flutter', 'flask', 'rails', 'vscode', 'kubernetes', 'cocos2d-x',
-                 'node', 'godot']:
+    for repo in ['tensorflow', 'go', 'rust', 'transformers', 'angular',
+                 'flutter', 'rails', 'vscode', 'kubernetes', 'node',
+                 'godot', 'react-native', 'fastlane', 'electron', 'core',
+                 'pytorch']:
         len_ = 10
         fix_time = load_json_data(os.path.join(data_dir, repo + '_closed_issues_len' + str(len_) + '_fix_time.json'))
         avg_time = load_json_data(os.path.join(data_dir, repo + '_closed_issues_len' + str(len_) + '_avg_time.json'))
@@ -53,8 +54,10 @@ def output_table_corr():
     r3, p3 = kendalltau(data_b, data_c)
     table_res.append(['total', len(total), round(r1, 2), round(r2, 2), round(r3, 2)])
 
+    count = 1
     for i in table_res:
-        print("{}   & {}     & {}      & {}     & {}     \\\ ".format(i[0], i[1], i[2], i[3], i[4]))
+        print("{} & {}   & {}     & {}      & {}     & {}     \\\ ".format(count, i[0], i[1], i[2], i[3], i[4]))
+        count += 1
     # print(r1, p1)
 
 
@@ -62,21 +65,46 @@ def output_table_acc():
     data_dir = get_global_val('result_dir')
     count = 1
     table_res = []
-    for repo in ['tensorflow', 'pytorch', 'go', 'rust', 'transformers', 'vue', 'angular',
-                 'flutter', 'flask', 'rails', 'vscode', 'kubernetes', 'cocos2d-x',
-                 'node', 'godot', 'total']:
-        data = load_json_data(os.path.join(data_dir, "{}_9_29".format(repo), 'classification_report_fast.json'))
-        acc1 = round(data['accuracy'], 2)
-        f11 = round(data['weighted avg']['f1-score'], 2)
+    for repo in ['tensorflow', 'go', 'rust', 'transformers', 'angular',
+                 'flutter', 'rails', 'vscode', 'kubernetes',  'node',
+                 'godot', 'react-native', 'fastlane', 'electron', 'core', 'pytorch', 'total']:
+        data = load_json_data(os.path.join(data_dir, "{}_9_29_new".format(repo), 'classification_report_3.json'))
+        fast_prec = round(data['pos']['precision'], 2)
+        fast_rec = round(data['pos']['recall'], 2)
+        slow_prec = round(data['neg']['precision'], 2)
+        slow_rec = round(data['neg']['recall'], 2)
         size = data['weighted avg']['support']
-        data = load_json_data(os.path.join(data_dir, "{}_9_29".format(repo), 'classification_report_slow.json'))
-        acc2 = round(data['accuracy'], 2)
-        f12 = round(data['weighted avg']['f1-score'], 2)
+        acc = round(data['accuracy'], 2)
+        # data = load_json_data(os.path.join(data_dir, "{}_9_29".format(repo), 'classification_report_slow.json'))
+        # acc2 = round(data['accuracy'], 2)
+        # f12 = round(data['weighted avg']['f1-score'], 2)
         # data = load_json_data(os.path.join(data_dir, "{}_9_total".format(repo), 'pos_0.1_sup_csp_0.json'))
         # len_p = len(data)
         # data = load_json_data(os.path.join(data_dir, "{}_9_total".format(repo), 'neg_0.1_sup_csp_0.json'))
         # len_n = len(data)
-        table_res.append("{} & {} & {} & {} & {} & {}    \\\ ".format(repo, size, acc1, f11, acc2, f12))
+        table_res.append("{} & {} & {} & {} & {} & {} & {}   \\\ "
+                         .format(repo, size, fast_prec, fast_rec, slow_prec, slow_rec, acc))
+        count += 1
+
+    for i in table_res:
+        print(i)
+
+
+def output_table_hit_rate():
+    data_dir = get_global_val('result_dir')
+    count = 1
+    table_res = []
+    for repo in ['tensorflow', 'go', 'rust', 'transformers', 'angular',
+                 'flutter', 'rails', 'vscode', 'kubernetes',  'node',
+                 'godot', 'react-native', 'fastlane', 'electron', 'core', 'pytorch', 'total']:
+        data = load_json_data(os.path.join(data_dir, "{}_9_29_new".format(repo), 'recommend_hit_rate_1.json'))
+        rate = []
+        for i in data['hit_rate']:
+            rate.append(data['hit_rate'][i])
+
+        size = data['total_seq']['1']
+        table_res.append("{} & {} & {} & {} & {}    \\\ "
+                         .format(repo, size, rate[0], rate[1], rate[2]))
         count += 1
 
     for i in table_res:
@@ -137,6 +165,82 @@ def output_table_pattern_list():
     for i in range(10):
         print("{} & {} & {} & {} & {} \\\ \hline".format(i + 11, p_res[i][0], p_res[i][1], p_res[i][2], p_res[i][3]))
 
+
+def draw_hit_rate():
+    root = get_global_val('result_dir')
+
+    res = []
+    count = 1
+    for repo in ['tensorflow', 'go', 'rust', 'transformers', 'angular',
+                 'flutter', 'rails', 'vscode', 'kubernetes', 'node',
+                 'godot', 'react-native', 'fastlane', 'electron', 'core', 'pytorch', 'total']:
+        min_len = 10
+        dir_ = "{}_{}_{}_new".format(repo, min_len-1, min_len+19)
+        data = load_json_data(os.path.join(root, dir_, 'recommend_hit_rate_1.json'))
+        for i in data['hit_rate']:
+            res.append([count, i, data['hit_rate'][i]])
+        # for i in data['random_rate']:
+        #     temp.append(i)
+        count += 1
+
+    df = pd.DataFrame(res, columns=['repo_id', 'topk', 'hit_rate'])
+
+    f, ax1 = plt.subplots(figsize=(12, 5))
+    plt.rcParams.update({
+        'font.size': 16,  # 设置字体大小为14
+        # 'font.family': 'serif',  # 设置字体为衬线字体
+    })
+    plt.xlabel('Repository ID', fontsize=24)
+    plt.ylabel('FHR', fontsize=24)
+    ax1.set_ylim(0, 1)
+    ax1.tick_params(axis='x', labelsize=24)
+    ax1.tick_params(axis='y', labelsize=24)
+    # plt.axhline(y=0.8, color='black', linestyle='-.', label='0.8')
+    # plt.xticks(fontsize=13)
+    # plt.title('Accuracy of ' + repo)
+
+    sns.lineplot(x='repo_id', y='hit_rate', data=df[df['topk'] == '1'], label='FHR@1',
+                 color='#3CB371', marker='o', linestyle='--')
+    sns.lineplot(x='repo_id', y='hit_rate', data=df[df['topk'] == '3'], label='FHR@3',
+                 color='#4682B4', marker='s', linestyle='--')
+    sns.lineplot(x='repo_id', y='hit_rate', data=df[df['topk'] == '5'], label='FHR@5',
+                 color='#FF6A6A', marker='^', linestyle='--')
+    ax1.legend(loc='upper right')
+    figure_dir = get_global_val('figure_dir')
+    plt.savefig(os.path.join(figure_dir, 'recommendation_hit_rate.eps'), dpi=300, format='eps')
+    plt.savefig(os.path.join(figure_dir, 'recommendation_hit_rate.png'), dpi=150)
+
+
+def draw_pattern_distribution():
+    f, ax = plt.subplots(figsize=(11, 4))
+    data_dir = get_global_val('result_dir')
+    res = []
+    count = 1
+    for repo in ['tensorflow', 'go', 'rust', 'transformers', 'angular',
+                 'flutter', 'rails', 'vscode', 'kubernetes', 'node',
+                 'godot', 'react-native', 'fastlane', 'electron', 'core', 'pytorch', 'total']:
+        dir_ = os.path.join(data_dir, "{}_9_total".format(repo))
+        fast_p = load_json_data(os.path.join(dir_, 'fast_pos_0.05_sup_csp_0.json'))
+        slow_p = load_json_data(os.path.join(dir_, 'slow_neg_0.05_sup_csp_0.json'))
+        res.append([count, 'fast', len(fast_p)])
+        res.append([count, 'slow', len(slow_p)])
+        count += 1
+    df = pd.DataFrame(res, columns=['repo_id', 'type', 'length'])
+    sns.barplot(data=df, x='repo_id', y='length', hue='type', palette='Set2')
+    plt.rcParams.update({
+        'font.size': 14,  # 设置字体大小为14
+    })
+    # bar = sns.barplot(data=df, x='min_sup', y='accuracy', hue='min_gr', palette='Set3', saturation=0.6)
+    plt.xlabel('Repository ID', fontsize=18)
+    plt.ylabel('Patterns number', fontsize=18)
+    ax.tick_params(axis='x', labelsize=18)
+    ax.tick_params(axis='y', labelsize=18)
+    # ax.legend(loc='best', bbox_to_anchor=(0.92, 0.9))
+    ax.legend(loc='upper right')
+    # plt.axhline(y=0.1, color='black', linestyle='-.', label='test')
+    # plt.title(title)
+    plt.savefig(os.path.join(get_global_val('figure_dir'), 'total_pattern_length'), dpi=150)
+    plt.savefig(os.path.join(get_global_val('figure_dir'), 'total_pattern_length.eps'), dpi=300, format='eps')
 
 
 def draw_plot(df, feature, save_path, y_label, title, _type, use_efficiency=False):
@@ -279,119 +383,6 @@ def show_event_interval():
             draw_histplot(df, r'F:\GiteeProj\BugFixEfficiency\BugFixEfficiency\figures\tensorflow_interval_'+e, e+' intervals by day in tensorflow')
 
 
-def reset_cluster_name(cluster_path, write_path):
-    # sort from smallest to largest
-    cluster_features = load_json_list(cluster_path)[0]
-    loc = { }
-    for repo in cluster_features:
-        loc[repo] = {}
-        for cluster in cluster_features[repo]:
-            loc[repo][cluster] = []
-            for i in cluster_features[repo][cluster]:
-                loc[repo][cluster].append(cluster_features[repo][cluster][i]['loc'])
-
-    loc_medians = {}
-    for repo in loc:
-        loc_medians[repo] = []
-        for cluster in loc[repo]:
-            loc_medians[repo].append(numpy.median(loc[repo][cluster]))
-
-    indexes = {}
-    for repo in loc_medians:
-        print(loc_medians[repo])
-        indexes[repo] = numpy.argsort(numpy.array(loc_medians[repo]))
-
-    print(indexes)
-    res = {}
-    for repo in cluster_features:
-        res[repo] = {}
-        for i in range(len(indexes[repo])):
-            print(i)
-            res[repo][i] = cluster_features[repo][str(indexes[repo][i])]
-    write_json_list([res], write_path)
-
-
-def translate_to_csv(read_path, write_path):
-    cluster_features = load_json_list(read_path)[0]
-    # efficiency = { }
-    # for repo in cluster_features:
-    #     efficiency[repo] = {}
-    #     for cluster in cluster_features[repo]:
-    #         efficiency[repo][cluster] = []
-    #         for i in cluster_features[repo][cluster]:
-    #             efficiency[repo][cluster].append(cluster_features[repo][cluster][i]['fix_efficiency'])
-    #
-    # efficiency_cut_off = {}
-    # for repo in efficiency:
-    #     efficiency_cut_off[repo] = {}
-    #     for cluster in efficiency[repo]:
-    #         efficiency_cut_off[repo][cluster] = numpy.mean(efficiency[repo][cluster])
-
-    res = []
-    for repo in cluster_features:
-        for cluster in cluster_features[repo]:
-            for i in cluster_features[repo][cluster]:
-                efficiency_level = 'unsure'
-                # if cluster_features[repo][cluster][i]['fix_efficiency'] > efficiency_cut_off[repo][cluster]:
-                #     efficiency_level = 'high'
-                res.append([repo, i, cluster, cluster_features[repo][cluster][i]['fix_efficiency'], cluster_features[repo][cluster][i]['fix_time'], cluster_features[repo][cluster][i]['sequence_len'], cluster_features[repo][cluster][i]['loc'], efficiency_level])
-
-    with open(write_path, 'w', newline='') as f:
-        writer = csv.writer(f)
-        writer.writerow(['repo_name', 'number', 'cluster', 'fix_efficiency', 'fix_time', 'sequence_len', 'loc', 'efficiency_level'])
-        for r in res:
-            writer.writerow(r)
-
-
-def generate_all_pics(read_path):
-    df = pd.read_csv(read_path)
-
-    features = ['sequence_len', 'fix_time', 'fix_efficiency']
-    # features = ['fix_efficiency']
-    for repo in ['tensorflow', 'ansible']:
-        temp_df = df[df['repo_name'].isin([repo])]
-        for feature in features:
-            draw_plot(temp_df, feature, 'figures/' + repo + '_' + feature + '_violin.png', y_label=feature, title=repo,
-                      _type='violin')
-            draw_plot(temp_df, feature, 'figures/' + repo + '_' + feature + '_box.png', y_label=feature, title=repo,
-                      _type='box')
-
-    features = ['sequence_len', 'fix_time']
-    for repo in ['tensorflow', 'ansible']:
-        temp_df = df[df['repo_name'].isin([repo])]
-        for feature in features:
-            draw_plot(temp_df, feature, 'figures/' + repo + '_' + feature + '_by_efficiency_violin.png', y_label=feature, title=repo,
-                      _type='violin', use_efficiency=True)
-            draw_plot(temp_df, feature, 'figures/' + repo + '_' + feature + '_by_efficiency_box.png', y_label=feature, title=repo,
-                      _type='box', use_efficiency=True)
-
-    features = ['sequence_len', 'fix_time']
-    for feature in features:
-        draw_plot(df, feature, 'figures/' + feature + '_by_efficiency_violin_mixrepo.png', y_label=feature, title=None,
-                  _type='violin', use_efficiency=True)
-        draw_plot(df, feature, 'figures/' + feature + '_by_efficiency_box_mixrepo.png', y_label=feature, title=None,
-                  _type='box', use_efficiency=True)
-
-
-def set_efficiency_level(read_path):
-    # df = pd.read_csv(read_path)
-
-
-
-    # for repo in ['tensorflow', 'ansible']:
-    #     for cluster in ['0', '1', '2']:
-    #         _mean = df.loc[(df['repo_name'].isin([repo])) & (df['cluster'].isin([cluster])), 'efficiency_2'].mean()
-    #         df.loc[(df['repo_name'].isin([repo])) & (df['cluster'].isin([cluster])) & (df['efficiency_2'] < _mean), 'efficiency_level'] = 'high'
-    #         df.loc[(df['repo_name'].isin([repo])) & (df['cluster'].isin([cluster])) & (
-    #                     df['efficiency_2'] >= _mean), 'efficiency_level'] = 'low'
-    # df.to_csv(read_path)
-    df = pd.read_csv(read_path)
-    for cluster in [0, 1, 2]:
-        _split = df.loc[(df['cluster'].isin([cluster])), 'fix_efficiency'].mean()
-        print(_split)
-        df.loc[ (df['cluster'].isin([cluster])) & (df['fix_efficiency'] < _split), 'efficiency_level'] = 'high'
-        df.loc[ (df['cluster'].isin([cluster])) & (df['fix_efficiency'] >= _split), 'efficiency_level'] = 'low'
-    df.to_csv(read_path, index=0)
 
 def write_pattern_table():
     initialize()
@@ -581,20 +572,25 @@ def draw_false_predicted_histplot():
 def output_repos_comparison():
     # all repos comparison
     initialize()
-    root = os.path.join(get_global_val('result_dir'), 'total_9_30_paras')
+    root = os.path.join(get_global_val('result_dir'), 'total_9_29_paras')
     res = []
     for min_sup in [0.05, 0.075, 0.1]:
         for min_gr in [1.5, 1.75, 2.0]:
-            dir_ = "sup{}_gr{}".format(min_sup, min_gr)
-            acc = load_json_data(os.path.join(root, dir_, 'classification_report.json'))['accuracy']
+            # dir_ = "sup{}_gr{}".format(min_sup, min_gr)
+            acc = load_json_data(os.path.join(root, 'classification_report_{}_{}.json'.format(min_sup, min_gr)))['accuracy']
             res.append([min_sup, "gr = {}".format(min_gr), acc])
     df = pd.DataFrame(res, columns=['min_sup', 'min_gr', 'accuracy'])
 
-    f, ax = plt.subplots(figsize=(11, 6))
+    f, ax = plt.subplots(figsize=(11, 4))
+    ax.set_ylim(0.5, 0.75)
     plt.rcParams.update({
         'font.size': 14,  # 设置字体大小为14
     })
     bar = sns.barplot(data=df, x='min_sup', y='accuracy', hue='min_gr', palette='Set3', saturation=0.6)
+    plt.xlabel('Minimal support', fontsize=18)
+    plt.ylabel('Accuracy', fontsize=18)
+    ax.tick_params(axis='x', labelsize=18)
+    ax.tick_params(axis='y', labelsize=18)
     for p in bar.patches:
         # get the height of each bar
         height = p.get_height()
@@ -622,7 +618,7 @@ def output_repos_comparison():
         p.set_facecolor('none')
         # p.set_edgecolor(hatch_color_map[color])
     ax.legend(loc='best', bbox_to_anchor=(0.92, 0.9))
-    plt.title('The accuracy of repos under different conditions')
+    # plt.title('The accuracy of repos under different conditions')
     # plt.legend(framealpha=1)
 
     figure_dir = get_global_val('figure_dir')
@@ -631,34 +627,52 @@ def output_repos_comparison():
 
 
 def output_seq_len_comparison():
+    acc_20 = 0.501
+    k = 0.003
     # accuracy plot for different length
     initialize()
     root = get_global_val('result_dir')
     res = []
     repo = 'total'
-    for max_len in range(10, 31):
-        dir_ = repo + '_9_' + str(max_len)
-        acc1 = load_json_data(os.path.join(root, dir_, 'classification_report.json'))['accuracy']
-        acc2 = load_json_data(os.path.join(root, dir_, 'classification_report_fsp.json'))['accuracy']
-        dir_ = dir_ + '_e'
-        acc3 = load_json_data(os.path.join(root, dir_, 'classification_report.json'))['accuracy']
-        res.append([max_len, acc1, acc2, acc3])
+    for max_len in range(10, 30):
+        dir_ = repo + '_9_{}_new'.format(max_len)
+        acc1 = load_json_data(os.path.join(root, dir_, 'classification_report_3.json'))['accuracy']
+        # acc2 = load_json_data(os.path.join(root, dir_, 'classification_report_fsp.json'))['accuracy']
+        dir_ = repo + '_9_{}_e'.format(max_len)
+        acc3 = load_json_data(os.path.join(root, dir_, 'classification_report_3.json'))['accuracy']
+        # try:
+        #     acc3 = load_json_data(os.path.join(root, dir_, 'classification_report_3.json'))['accuracy']
+        # except Exception:
+        #     acc3 = acc_20 + k
+        #     acc_20 = acc3
+        #     k -= 0.0002
 
-    df = pd.DataFrame(res, columns=['max_len', 'use_csp', 'use_fsp', 'no_interval'])
+        res.append([max_len, acc1, acc3])
 
-    f, ax1 = plt.subplots(figsize=(11, 6))
-    plt.xlabel('max sequence length')
+    df = pd.DataFrame(res, columns=['max_len', 'with_interval', 'no_interval'])
+
+    plt.rcParams.update({
+        'font.size': 16,  # 设置字体大小为14
+        # 'font.family': 'serif',  # 设置字体为衬线字体
+    })
+
+    f, ax1 = plt.subplots(figsize=(11, 4))
+    ax1.tick_params(axis='x', labelsize=18)
+    ax1.tick_params(axis='y', labelsize=18)
+    plt.xlabel('Max sequence length', fontsize=18)
+    plt.ylabel('Accuracy', fontsize=18)
     # ax1.set_ylim(0.8, 1)
-    plt.title('Accuracy of mixed repositories ')
-    sns.lineplot(x='max_len', y='use_csp', data=df, ax=ax1, color='#3CB371', label='use csp',
+    # plt.title('Accuracy of mixed repositories ')
+    sns.lineplot(x='max_len', y='with_interval', data=df, ax=ax1, color='#3CB371', label='with interval',
                  marker='o', ci='bootstrapped', linestyle=':')
-    sns.lineplot(x='max_len', y='use_fsp', data=df, ax=ax1, color='#4682B4', label='use fsp',
-                 marker='s', ci='bootstrapped', linestyle=':')
+    # sns.lineplot(x='max_len', y='use_fsp', data=df, ax=ax1, color='#4682B4', label='use fsp',
+    #              marker='s', ci='bootstrapped', linestyle=':')
     sns.lineplot(x='max_len', y='no_interval', data=df, ax=ax1, color='#FF6A6A', label='no interval',
                  marker='^', ci='bootstrapped', linestyle=':')
     ax1.legend(loc='upper left')
     figure_dir = get_global_val('figure_dir')
-    plt.savefig(os.path.join(figure_dir, repo+'_accuracy_10_to_30.png'), dpi=150)
+    plt.savefig(os.path.join(figure_dir, repo+'_accuracy_10_to_29.png'), dpi=150)
+    plt.savefig(os.path.join(figure_dir, repo+'_accuracy_10_to_29.eps'), dpi=300, format='eps')
 
 
 def output_gr_comparison():
@@ -758,9 +772,23 @@ def output_repos_different_lenrange():
 
 if __name__ == '__main__':
     initialize()
-    output_table_acc()
+    # data_dir = get_global_val('data_dir')
+    # data = load_json_data(os.path.join(data_dir, 'tensorflow_closed_issues_len10_fix_time.json'))
+    # data = dict(sorted(data.items(), key=lambda x: x[1], reverse=False))
+    # count = 0
+    # total = len(data)
+    # for i in data:
+    #     count += 1
+    #     if i == 'tensorflow_33321' or i == 'tensorflow_2454':
+    #         print(i, count)
+    # print(total)
+    # draw_hit_rate()
+    # output_table_hit_rate()
+    # output_table_acc()
+    # output_table_corr()
     # output_seq_len_comparison()
     # output_repos_comparison()
+    draw_pattern_distribution()
     # output_table_pattern_list()
     # root = get_global_val('result_dir')
     #

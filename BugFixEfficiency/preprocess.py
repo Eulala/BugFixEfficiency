@@ -8,8 +8,8 @@ from output import *
 
 # state_map = {'new': 1, 'comprehended': 2, 'assigned': 3, 'proposed': 4, 'passed': 5, 'closed': 6, 'failed': 7, 'discussed': 8}
 bots = {'tensorflowbutler', 'google-ml-butler', 'tensorflow-bot', 'copybara-service', 'tensorflow-copybara',
-        'ansible', 'ansibot', 'github-project-automation', 'pytorchmergebot', 'gopherbot', 'ngbot', 'github-actions',
-        'VSCodeTriageBot', }
+        'github-project-automation', 'pytorch-bot', 'gopherbot', 'ngbot', 'github-actions',
+        'VSCodeTriageBot', 'home-assistant'}
 
 
 def extract_raw_data():
@@ -19,8 +19,8 @@ def extract_raw_data():
     mongo_c.set_db_name(mongo_config['db_name'])
     mongo_c.connect()
 
-    data = mongo_c.get_col_value(col_name='issue_discussion', cond={'repo_name': {"$in": ['nodejs/node']}, 'behavior_type': 'collective'})
-    write_json_list(data, data_dir + 'node_issue_discussion.json')
+    data = mongo_c.get_col_value(col_name='issue_discussion', cond={'repo_name': {"$in": ['home-assistant/core']}, 'behavior_type': 'collective'})
+    write_json_list(data, data_dir + 'core_issue_discussion.json')
     mongo_c.close()
 
     # mongo_c = MyMongo(mongo_config['ip'], 'sbh', 'sbh123456', port=int(mongo_config['port']))
@@ -53,37 +53,64 @@ def issue_preprocess(repo_name):
                 is_close = True
         # if not is_close:
         #     continue
+        # if i['target']['number'] != 75145:
+        #     continue
+        timeline_sequence = {}
+        for e in i['action_sequence']:
+            if e['occur_at'] not in timeline_sequence:
+                timeline_sequence[e['occur_at']] = []
+            timeline_sequence[e['occur_at']].append(e)
+        # print(timeline_sequence)
 
-        del_index = []
-        for j in range(len(temp_act)):
-            a = temp_act[j]
-            if a['event_type'] == 'MentionedEvent':
-                try:
-                    b = temp_act[j+1]
-                    if b['event_type'] == 'SubscribedEvent':
-                        # MentionedEvent and SubscribedEvent of the same time compose an @ event
-                        del_index.append(j+1)
-                except Exception:
-                    pass
-            elif a['event_type'] == 'IssueComment':
-                for u in range(j+1, len(temp_act)):
-                    if temp_act[u]['event_type'] == 'MentionedEvent':
-                        # @ more than one user
-                        if calculate_delta_t(a['occur_at'], temp_act[u]['occur_at'], unit='s') < 2:
-                            del_index.append(u)
-        del_index = list(set(del_index))
-        del_index.sort(reverse=True)
-        try:
-            for j in del_index:
-                temp_act.pop(j)
-        except Exception:
-            print(del_index, temp_act)
-            exit(-1)
+        new_event_sequence = []
+        for t in timeline_sequence:
+            if len(timeline_sequence[t]) == 1:
+                new_event_sequence.append(timeline_sequence[t][0])
+            else:
+                Already_exist = {'MentionedEvent': 0, 'SubscribedEvent': 0,
+                                 'LabeledEvent': 0, 'UnlabeledEvent': 0}
+                for e in timeline_sequence[t]:
+                    if e['event_type'] in Already_exist:
+                        if Already_exist[e['event_type']] == 1:
+                            continue
+                        if e['event_type'] == 'SubscribedEvent' and Already_exist['MentionedEvent'] == 1:
+                            continue
+                        Already_exist[e['event_type']] = 1
+                    new_event_sequence.append(e)
+        # print(new_event_sequence)
+        # exit(-1)
+
+        # del_index = []
+        # for j in range(len(temp_act)):
+        #     a = temp_act[j]
+        #     if a['event_type'] == 'MentionedEvent':
+        #         try:
+        #             b = temp_act[j+1]
+        #             if b['event_type'] == 'SubscribedEvent':
+        #                 # MentionedEvent and SubscribedEvent of the same time compose an @ event
+        #                 del_index.append(j+1)
+        #         except Exception:
+        #             pass
+        #     elif a['event_type'] == 'IssueComment':
+        #         for u in range(j+1, len(temp_act)):
+        #             if temp_act[u]['event_type'] == 'MentionedEvent':
+        #                 # @ more than one user
+        #                 if calculate_delta_t(a['occur_at'], temp_act[u]['occur_at'], unit='s') < 2:
+        #                     del_index.append(u)
+        # del_index = list(set(del_index))
+        # del_index.sort(reverse=True)
+        # try:
+        #     for j in del_index:
+        #         temp_act.pop(j)
+        # except Exception:
+        #     print(del_index, temp_act)
+        #     exit(-1)
         if is_close:
             # from the start to the last closed event
-            for j in range(len(temp_act)-1, 0, -1):
-                if temp_act[j]['event_type'] == 'ClosedEvent':
-                    i['action_sequence'] = temp_act[0:j+1]
+            # print(new_event_sequence)
+            for j in range(len(new_event_sequence)-1, 0, -1):
+                if new_event_sequence[j]['event_type'] == 'ClosedEvent':
+                    i['action_sequence'] = new_event_sequence[0:j+1]
                     break
         if is_close:
             closed_issues.append(i)
@@ -173,12 +200,16 @@ def calculate_person_time(repo_name, min_len):
 
 
 def classify_sequence(repo_name, len_, use_fix=True):
+    repos = ['tensorflow', 'go', 'rust', 'transformers', 'angular', 'flutter', 'rails', 'vscode',
+             'kubernetes',  'node', 'godot', 'react-native', 'fastlane', 'electron', 'core', 'pytorch']
     data_dir = get_global_val('data_dir')
     if repo_name == 'total':
-        files = list(filter(lambda x: '_closed_issues_len'+str(len_)+'.json' in x and 'ansible' not in x, os.listdir(data_dir)))
+        files = list(filter(lambda x: '_closed_issues_len'+str(len_)+'.json' in x, os.listdir(data_dir)))
         data = []
         for f in files:
-            data += load_json_list(os.path.join(data_dir, f))
+            repo = f.split('_')[0]
+            if repo in repos:
+                data += load_json_list(os.path.join(data_dir, f))
         files = list(filter(lambda x: '_closed_issues_len' + str(len_) in x and 'fix_' in x and 'ansible' not in x, os.listdir(data_dir)))
         fix_time = {}
         for f in files:
@@ -252,17 +283,19 @@ def classify_sequence(repo_name, len_, use_fix=True):
     # qs = qs_2
     thresholds = 60*24*60
     # print(thresholds)
-    qs = numpy.percentile(list(fix_time_new.values()), (25, 50, 75), method='midpoint')
+    # qs = numpy.percentile(list(fix_time_new.values()), (25, 50, 75), method='midpoint')
+    qs = numpy.percentile(list(fix_time.values()), (100/3, 100 - 100/3), method='midpoint')
+    # qs = numpy.percentile(list(fix_time_new.values()), (33, 66), method='midpoint')
     print(qs)
     for i in data:
         try:
             # if fix_time[i['_id']] <= 1*24*60:
             #     continue
-            if fix_time[i['_id']] >= K_max or fix_time[i['_id']] < K_min:
-                continue
+            # if fix_time[i['_id']] >= K_max or fix_time[i['_id']] < K_min:
+            #     continue
             if fix_time[i['_id']] <= qs[0]:
                 fast_i.append(i)
-            elif fix_time[i['_id']] >= qs[2]:
+            elif fix_time[i['_id']] >= qs[1]:
                 slow_i.append(i)
             else:
                 median_i.append(i)

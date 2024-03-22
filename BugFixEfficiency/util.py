@@ -206,3 +206,144 @@ def load_config():
     config = configparser.ConfigParser()
     config.read('configurations.ini')
     return config
+
+
+def calcu_prefix_sum_b(data):
+    if len(data) == 0:
+        return [], [], []
+    pos = [0] * len(data)
+    neg = [0] * len(data)
+    neu = [0] * len(data)
+    for i in range(len(data)):
+        if data[i][1] == 'pos':
+            pos[i] = 1
+        elif data[i][1] == 'neg':
+            neg[i] = 1
+        else:
+            neu[i] = 1
+    sum_p = [0] * len(data)
+    sum_n = [0] * len(data)
+    sum_u = [0] * len(data)
+    sum_p[0] = pos[0]
+    sum_n[0] = neg[0]
+    sum_u[0] = neu[0]
+    for i in range(1, len(pos)):
+        sum_p[i] = sum_p[i - 1] + pos[i]
+        sum_n[i] = sum_n[i - 1] + neg[i]
+        sum_u[i] = sum_u[i-1] + neu[i]
+    return sum_p, sum_n, sum_u
+
+
+def calculate_entropy_b(p_num, n_num, u_num, total):
+    H_L = 0
+    H_R = 0
+    H_U = 0
+    if p_num != 0:
+        H_L = - (p_num / total) * numpy.log2(p_num / total)
+    if n_num != 0:
+        H_R = - (n_num / total) * numpy.log2(n_num / total)
+    if u_num != 0:
+        H_U = - (u_num / total) * numpy.log2(u_num / total)
+    H_0 = H_L + H_R + H_U
+    return H_0
+
+def calculate_label_num_b(sum_p, sum_n, sum_u, split_pos):
+    # start = time.time()
+    label_num = [0]*6
+
+    last_p = 0
+    last_n = 0
+    if split_pos == 0:
+        label_num[0] = 0
+        label_num[1] = 0
+        label_num[2] = 0
+    else:
+        label_num[0] = sum_p[split_pos-1]
+        label_num[1] = sum_n[split_pos-1]
+        label_num[2] = sum_u[split_pos-1]
+
+    label_num[3] = sum_p[len(sum_p)-1] - label_num[0]
+    label_num[4] = sum_n[len(sum_n)-1] - label_num[1]
+    label_num[5] = sum_u[len(sum_u) - 1] - label_num[2]
+    # end = time.time()
+    # print(end-start)
+    return label_num
+
+def find_split_by_entropy_b(data, sum_p=[], sum_n=[], sum_u=[]):
+    if len(data) == 0:
+        return -1
+
+    _min = data[0][0]
+    _max = data[len(data) - 1][0]
+    if _min == _max:
+        return -1
+    label_num = [0, 0, 0, 0, 0, 0]
+
+    if len(sum_p) == len(sum_n) == 0:
+        sum_p, sum_n, sum_u = calcu_prefix_sum_b(data)
+    p_num = sum_p[len(sum_p)-1]
+    n_num = sum_n[len(sum_n)-1]
+    u_num = sum_u[len(sum_u)-1]
+    label_num[3] = p_num
+    label_num[4] = n_num
+    label_num[5] = u_num
+    # print(label_num)
+    if label_num[3] == len(data) or label_num[4] == len(data) or label_num[5] == len(data):  # already divided into 2 classes
+        return -1
+
+    H_0 = calculate_entropy_b(p_num, n_num, u_num, len(data))
+    IG = calculate_information_gain_b(label_num, len(data), H_0)
+    best_split = 0
+    max_I = IG
+    # print(IG)
+    i = 0
+    while len(data)-1 > i > -1:
+        split_i = get_split_b(data[i+1:len(data)], data[i][0])
+        if split_i < 0:
+            i = len(data)
+        else:
+            i = split_i + (i + 1)
+        label_num = calculate_label_num_b(sum_p, sum_n, sum_u, i)
+        # print(data[j][0], data[k][0], data[m][0])
+        # print(i, label_num)
+        IG = calculate_information_gain_b(label_num, len(data), H_0)
+        # print(IG)
+        # print(max_I)
+        if IG > max_I:
+            max_I = IG
+            best_split = i
+        # print(i, len(data), IG)
+    # print(max_I)
+    return best_split
+
+
+def calculate_information_gain_b(label_num, data_num, H):
+    # print(label_num)
+    _bin = int(len(label_num)/3)
+    calcu_part = [0]*len(label_num)
+    _num = [0]*_bin
+    for i in range(len(label_num)):
+        k = math.floor(i / 3)
+        _num[k] += label_num[i]
+    # print(_num)
+    for i in range(len(label_num)):
+        if label_num[i] != 0:
+            k = math.floor(i / 3)
+            calcu_part[i] = - (label_num[i] / _num[k]) * (numpy.log2(label_num[i] / _num[k]))
+
+    # print(calcu_part)
+    LH = [0]*_bin
+    for i in range(len(label_num)):
+        k = math.floor(i / 3)
+        LH[k] += calcu_part[i]
+
+    IG = H
+    for i in range(_bin):
+        IG -= LH[i] * (_num[i]/data_num)
+    return IG
+
+def get_split_b(data, ini_val):
+    for i in range(len(data)):
+        if data[i][0] > ini_val:
+            return i
+    return -1

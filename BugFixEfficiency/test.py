@@ -30,36 +30,35 @@ def draw_violin_plot(data_path, save_path):
 
 
 if __name__ == '__main__':
-
     initialize()
     data_dir = get_global_val('result_dir')
 
-    for repo in ['tensorflow', 'pytorch', 'go', 'rust', 'transformers', 'vue', 'angular',
-                 'flutter', 'flask', 'rails', 'vscode', 'kubernetes', 'cocos2d-x',
-                 'node', 'godot', 'total']:
-        min_len = 10
-        for max_len in range(29, 30):
-            # select_issue_longer_than(min_len=min_len, repo_name=repo)
-            # calculate_fix_time(repo_name=repo, min_len=min_len)
-            t = classify_sequence(repo_name=repo, len_=min_len)
+    # for repo in ['tensorflow', 'go', 'rust', 'transformers', 'angular',
+    #              'flutter', 'rails', 'vscode', 'kubernetes',  'node',
+    #              'godot', 'react-native', 'fastlane', 'electron', 'core',
+    #              'pytorch']:
+    for repo in ['total']:
+        # 'core'
+        min_len = 9
+        for max_len in range(10, 30):
+            data_dir = os.path.join(get_global_val('result_dir'),
+                                    "{}_{}_new".format(repo, str(min_len), str(max_len)))
+            total_test_3 = []
+            total_pred_3 = []
+            for count in range(1, 11):
+                test, pred, temp_list = validate_seq_vector_3(data_dir, count, min_sup=0.05, min_gr=1.5,
+                                                              use_csp=False, use_PCA=False)
+                total_test_3 += test
+                for i in pred:
+                    total_pred_3.append(i)
 
-            conduct_CDSPM(repo, 99999999, min_len=min_len-1, max_len=max_len)
-
+            print('------------fast vs median vs slow-------------')
+            print(confusion_matrix(total_test_3, total_pred_3, labels=['pos', 'neu', 'neg']))
+            print(classification_report(total_test_3, total_pred_3))
+            write_json_data(classification_report(total_test_3, total_pred_3, output_dict=True),
+                            os.path.join(data_dir, 'classification_report_3_fsp.json'))
     exit(-1)
 
-    for repo in ['tensorflow', 'pytorch', 'go', 'rust', 'transformers', 'vue', 'angular',
-                 'flutter', 'flask', 'rails', 'vscode', 'kubernetes', 'cocos2d-x',
-                 'node', 'godot']:
-        min_len = 10
-        # data_dir = get_global_val('result_dir') + 'tensorflow_9_30_test/'
-        # test, pred, temp_seq = validate_seq_vector(data_dir, 1, use_PCA=True)
-        # select_issue_longer_than(min_len=min_len, repo_name=repo)
-        # calculate_fix_time(repo_name=repo, min_len=min_len)
-        t = classify_sequence(repo_name=repo, len_=min_len)
-
-        for max_len in range(30, 31):
-            # conduct_CDSPM(repo, t, min_len=min_len - 1, max_len=max_len)
-            conduct_CDSPM_total(repo, t, min_len=min_len - 1, max_len=max_len)
 
     # for max_len in range(10, 31):
     #     data_dir = get_global_val('result_dir') + repo + '_' + str(min_len-1) + '_' + str(max_len)
